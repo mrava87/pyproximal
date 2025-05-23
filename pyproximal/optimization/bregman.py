@@ -1,11 +1,18 @@
 import time
 import numpy as np
 from copy import deepcopy
+from typing import Callable, Optional, Any, Tuple, Union # Added Union
+
+from pyproximal.ProxOperator import ProxOperator
+from pylops.LinearOperator import LinearOperator
 
 
-def Bregman(proxf, proxg, x0, solver, A=None, alpha=1., niterouter=10,
-            warm=False, tolx=1e-10, tolf=1e-10, bregcallback=None, show=False,
-            **kwargs_solver):
+def Bregman(proxf: ProxOperator, proxg: ProxOperator, x0: np.ndarray,
+            solver: Callable, A: Optional[LinearOperator] = None,
+            alpha: float = 1., niterouter: int = 10,
+            warm: bool = False, tolx: float = 1e-10, tolf: float = 1e-10,
+            bregcallback: Optional[Callable[[np.ndarray], None]] = None,
+            show: bool = False, **kwargs_solver: Any) -> np.ndarray:
     r"""Bregman iterations with Proximal Solver
 
     Solves one of the following minimization problem using Bregman iterations
@@ -94,7 +101,7 @@ def Bregman(proxf, proxg, x0, solver, A=None, alpha=1., niterouter=10,
 
     """
     if show:
-        tstart = time.time()
+        tstart: float = time.time()
         print('Bregman\n'
               '---------------------------------------------------------\n'
               'Proximal operator (f): %s\n'
@@ -104,28 +111,32 @@ def Bregman(proxf, proxg, x0, solver, A=None, alpha=1., niterouter=10,
               'alpha = %10e\ttolf = %10e\ttolx = %10e\n'
               'niter = %d\n' % (type(proxf), type(proxg), type(A), solver,
                                 alpha, tolf, tolx, niterouter))
-        head = '   Itn       x[0]          f           g       J = f + g'
+        head: str = '   Itn       x[0]          f           g       J = f + g'
         print(head)
 
     # multiply alpha to proxg
-    proxg = alpha * proxg
+    proxg_scaled: ProxOperator = alpha * proxg
 
-    x = np.copy(x0)
-    q = np.zeros_like(x0)
+    x: np.ndarray = np.copy(x0)
+    q: np.ndarray = np.zeros_like(x0)
     for iiter in range(niterouter):
-        xold = x.copy()
+        xold: np.ndarray = x.copy()
         # solve optimization
         if iiter == 0:
-            proxf_q = proxf
+            proxf_q: ProxOperator = proxf
         else:
             proxf_q = deepcopy(proxf) - alpha * q.copy()
 
         if A is None:
-            x = solver(proxf_q, proxg, x0=x if warm else x0, **kwargs_solver)
+            x_solver_result: Union[np.ndarray, Tuple[np.ndarray, ...]] = \
+                solver(proxf_q, proxg_scaled, x0=x if warm else x0, **kwargs_solver)
         else:
-            x = solver(proxf_q, proxg, A=A, x0=x if warm else x0, **kwargs_solver)
-        if isinstance(x, tuple):
-            x = x[0]
+            x_solver_result = \
+                solver(proxf_q, proxg_scaled, A=A, x0=x if warm else x0, **kwargs_solver)
+        if isinstance(x_solver_result, tuple):
+            x = x_solver_result[0]
+        else:
+            x = x_solver_result
 
         # update q
         q = q - (1. / alpha) * proxf.grad(x)
@@ -134,11 +145,15 @@ def Bregman(proxf, proxg, x0, solver, A=None, alpha=1., niterouter=10,
         if bregcallback is not None:
             bregcallback(x)
 
-        pf = proxf(x)
+        pf: float = proxf(x)
         if show:
             if iiter < 10 or niterouter - iiter < 10 or iiter % 10 == 0:
-                pg = proxg(A.matvec(x)) if A is not None else proxg(x)
-                msg = '%6g  %12.5e  %10.3e  %10.3e  %10.3e' % \
+                pg: float
+                if A is not None:
+                    pg = proxg_scaled(A.matvec(x))
+                else:
+                    pg = proxg_scaled(x)
+                msg: str = '%6g  %12.5e  %10.3e  %10.3e  %10.3e' % \
                       (iiter + 1, x[0], pf, pg, pf + pg)
                 print(msg)
 

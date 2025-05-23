@@ -1,8 +1,9 @@
 import numpy as np
+from typing import Any # Any for Optional Op in super().__init__
 
-from pyproximal.ProxOperator import _check_tau
-from pyproximal import ProxOperator
-from pyproximal.proximal import L2, L1
+from pyproximal.ProxOperator import _check_tau, ProxOperator
+from pyproximal.proximal.L2 import L2 # Ensure correct import path
+from pyproximal.proximal.L1 import L1 # Ensure correct import path
 
 
 class Huber(ProxOperator):
@@ -40,32 +41,38 @@ class Huber(ProxOperator):
         \end{cases}
         
     """
-    def __init__(self, alpha):
-        super().__init__(None, False)
-        self.alpha = alpha
-        self.l2 = L2(sigma=1. / self.alpha)
-        self.l1 = L1()
+    def __init__(self, alpha: float):
+        super().__init__(None, False) # Op is None, hasgrad is False
+        self.alpha: float = alpha
+        self.l2: L2 = L2(sigma=1. / self.alpha)
+        self.l1: L1 = L1()
 
-    def __call__(self, x):
-        h = np.zeros_like(x)
-        xabs = np.abs(x)
-        mask = xabs > self.alpha
-        h[~mask] = xabs[~mask] ** 2 / (2. * self.alpha)
+    def __call__(self, x: np.ndarray) -> float: # Returns a scalar sum
+        h: np.ndarray = np.zeros_like(x)
+        xabs: np.ndarray = np.abs(x)
+        mask: np.ndarray = xabs > self.alpha
+        h[~mask] = xabs[~mask]**2 / (2. * self.alpha)
         h[mask] = xabs[mask] - self.alpha / 2.
-        return np.sum(h)
+        return float(np.sum(h))
 
     @_check_tau
-    def prox(self, x, tau):
-        y = np.zeros_like(x)
-        xabs = np.abs(x)
-        mask = xabs > self.alpha
-        y[~mask] = self.l2.prox(x[~mask], tau)
-        y[mask] = self.l1.prox(x[mask], tau)
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        y: np.ndarray = np.zeros_like(x)
+        xabs: np.ndarray = np.abs(x)
+        mask: np.ndarray = xabs > self.alpha
+        
+        # Elements where |x_i| <= alpha
+        if np.any(~mask): # Check if there are any elements to process for L2 part
+            y[~mask] = self.l2.prox(x[~mask], tau)
+        
+        # Elements where |x_i| > alpha
+        if np.any(mask): # Check if there are any elements to process for L1 part
+            y[mask] = self.l1.prox(x[mask], tau)
+            
         # alternative from https://math.stackexchange.com/questions/1650411/
         # proximal-operator-of-the-huber-loss-function... currently commented
         # as it does not provide the same result
         # y = (1. - tau / np.maximum(np.abs(x), tau + self.alpha)) * x
-
         return y
     
 
@@ -103,19 +110,28 @@ class HuberCircular(ProxOperator):
         In the IEEE Transactions on Control Systems Technology, 2013.
         
     """
-    def __init__(self, alpha):
-        super().__init__(None, False)
-        self.alpha = alpha
+    def __init__(self, alpha: float):
+        super().__init__(None, False) # Op is None, hasgrad is False
+        self.alpha: float = alpha
 
-    def __call__(self, x):
-        l2 = np.linalg.norm(x)
-        if l2 <= self.alpha:
-            h = l2 ** 2 / (2 * self.alpha)
+    def __call__(self, x: np.ndarray) -> float: # Returns a scalar
+        l2_norm: float = float(np.linalg.norm(x)) # Cast to float
+        h_val: float
+        if l2_norm <= self.alpha:
+            h_val = l2_norm**2 / (2 * self.alpha)
         else:
-            h = l2 - self.alpha / 2.
-        return h
+            h_val = l2_norm - self.alpha / 2.
+        return h_val
 
     @_check_tau
-    def prox(self, x, tau):
-        x = (1. - tau / max(np.linalg.norm(x), tau + self.alpha)) * x
-        return x
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        norm_x: float = float(np.linalg.norm(x)) # Cast to float
+        # Ensure no division by zero if norm_x and (tau + alpha) are both zero
+        denominator: float = float(max(norm_x, tau + self.alpha)) # Cast max result
+        if denominator == 0:
+             # This case implies norm_x is 0 and tau + alpha is 0.
+             # If x is zero vector, prox is x.
+            return x
+        
+        x_prox: np.ndarray = (1. - tau / denominator) * x
+        return x_prox

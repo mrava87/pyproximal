@@ -1,8 +1,9 @@
 import numpy as np
-from pyproximal.ProxOperator import _check_tau
+from pyproximal.ProxOperator import ProxOperator # For prox type hint
 
 
-def moreau(prox, x, tau, tol=1e-5, raiseerror=True, verb=False):
+def moreau(prox: ProxOperator, x: np.ndarray, tau: float,
+           tol: float = 1e-5, raiseerror: bool = True, verb: bool = False) -> bool:
     r"""Moreau Identity.
 
     The Moreau identity defines a relation between the vector :math:`\mathbf{u}`,
@@ -39,16 +40,19 @@ def moreau(prox, x, tau, tol=1e-5, raiseerror=True, verb=False):
 
     """
     # compute prox
-    p = prox.prox(x, tau)
+    p: np.ndarray = prox.prox(x, tau)
 
     # compute dualprox
-    pdual = tau * prox.proxdual(x / tau, 1. / tau)
+    # prox.proxdual returns np.ndarray, tau is float, so pdual is np.ndarray
+    pdual: np.ndarray = tau * prox.proxdual(x / tau, 1. / tau)
 
     if verb:
         print('x: ', x)
         print('p + pdual: ', p + pdual)
         print('error: ', x - (p + pdual))
-    if np.allclose(x, p + pdual, atol=tol):
+    
+    # np.allclose returns a bool
+    if bool(np.allclose(x, p + pdual, atol=tol)):
         return True
     else:
         if raiseerror:

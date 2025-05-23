@@ -1,40 +1,77 @@
-from numba import cuda
+from numba import cuda # type: ignore # Numba is not available in this environment
+import numpy as np # For np.ndarray type hint, though numba uses its own array types internally
+from typing import Any # For device arrays, which don't have a standard Python type hint
 
+
+# Note: Type hints for Numba JIT functions are primarily for Python-side static analysis.
+# Numba has its own type inference and system for CUDA.
+# For device functions and kernels, 'Any' or specific Numba types (if available for hinting)
+# might be used for array-like structures passed to/from CUDA.
+# Using np.ndarray here as a placeholder for "CUDA array-like".
 
 @cuda.jit(device=True)
-def fun_jit_cuda(mu, x, coeffs, scalar, lower, upper):
+def fun_jit_cuda(mu: float, x: Any, # CUDA device array (e.g., numba.cuda.cudadrv.devicearray.DeviceNDArray)
+                 coeffs: Any, scalar: float,
+                 lower: float, upper: float) -> float:
     """Bisection function"""
-    p = 0
+    p: float = 0.0 # Ensure p is float
     for i in range(coeffs.shape[0]):
-        p += coeffs[i] * min(max(x[i] - mu * coeffs[i], lower), upper)
+        # Numba's min/max handle scalars, direct translation
+        val_inside: float = x[i] - mu * coeffs[i]
+        clipped_val: float
+        if val_inside < lower:
+            clipped_val = lower
+        elif val_inside > upper:
+            clipped_val = upper
+        else:
+            clipped_val = val_inside
+        p += coeffs[i] * clipped_val
     return p - scalar
 
 
 @cuda.jit(device=True)
-def bisect_jit_cuda(x, coeffs, scalar, lower, upper, bisect_lower, bisect_upper,
-                    maxiter, ftol, xtol):
+def bisect_jit_cuda(x: Any, coeffs: Any, scalar: float, # CUDA device arrays
+                    lower: float, upper: float,
+                    bisect_lower: float, bisect_upper: float,
+                    maxiter: int, ftol: float, xtol: float) -> float:
     """Bisection method (See _Simplex_numba for details).
 
     """
-    a, b = bisect_lower, bisect_upper
-    fa = fun_jit_cuda(a, x, coeffs, scalar, lower, upper)
+    a: float = bisect_lower
+    b: float = bisect_upper
+    fa: float = fun_jit_cuda(a, x, coeffs, scalar, lower, upper)
+    # fa_sign: float # To store sign of fa if needed, Numba handles division by abs fine
+    
     for iiter in range(maxiter):
-        c = (a + b) / 2.
-        if (b - a) / 2 < xtol:
+        c: float = (a + b) / 2.
+        if (b - a) / 2. < xtol: # Ensure float division
             return c
-        fc = fun_jit_cuda(c, x, coeffs, scalar, lower, upper)
+        fc: float = fun_jit_cuda(c, x, coeffs, scalar, lower, upper)
         if abs(fc) < ftol:
             return c
-        if fc / abs(fc) == fa / abs(fa):
+        
+        # Check signs: (fc / abs(fc)) == (fa / abs(fa)) can be problematic if fc or fa is zero.
+        # Numba might handle this, but safer: np.sign(fc) == np.sign(fa)
+        # However, direct translation of original logic:
+        fc_sign: float = 0.0
+        if fc != 0: fc_sign = fc / abs(fc) # Avoid division by zero
+        
+        fa_sign: float = 0.0
+        if fa != 0: fa_sign = fa / abs(fa)
+
+        if fc_sign == fa_sign: # Same sign (or both zero)
             a = c
             fa = fc
         else:
             b = c
-    return c
+    return c # Or (a+b)/2.0 if maxiter reached without convergence
 
 
 @cuda.jit
-def simplex_jit_cuda(x, coeffs, scalar, lower, upper, maxiter, ftol, xtol, y):
+def simplex_jit_cuda(x: Any, coeffs: Any, scalar: float, # CUDA device arrays
+                     lower: float, upper: float,
+                     maxiter: int, ftol: float, xtol: float,
+                     y: Any): # Output array (CUDA device array)
     """Simplex proximal
 
     Parameters

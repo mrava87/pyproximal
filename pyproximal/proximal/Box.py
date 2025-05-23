@@ -1,7 +1,7 @@
 import numpy as np
-from pyproximal.ProxOperator import _check_tau
-from pyproximal import ProxOperator
-from pyproximal.projection import BoxProj
+from pyproximal.ProxOperator import _check_tau, ProxOperator
+from pyproximal.projection.Box import BoxProj # Ensure correct import path
+from typing import Union, Any, Tuple # Added Tuple just in case, though not directly for these errors
 
 
 class Box(ProxOperator):
@@ -23,15 +23,24 @@ class Box(ProxOperator):
     details.
 
     """
-    def __init__(self, lower=-np.inf, upper=np.inf):
-        super().__init__(None, False)
-        self.lower = lower
-        self.upper = upper
-        self.box = BoxProj(self.lower , self.upper)
+    def __init__(self, lower: Union[float, np.ndarray] = -np.inf,
+                 upper: Union[float, np.ndarray] = np.inf):
+        super().__init__(None, False) # Op is None, hasgrad is False
+        self.lower: Union[float, np.ndarray] = lower
+        self.upper: Union[float, np.ndarray] = upper
+        self.box: BoxProj = BoxProj(self.lower, self.upper)
 
-    def __call__(self, x):
-        return np.all((x > self.lower) & (x < self.upper)).astype(x.dtype)
+    def __call__(self, x: np.ndarray) -> float: # Changed return type to float
+        # For indicator function, it should be 0.0 if in set, np.inf otherwise.
+        # np.all can return np.bool_, ensure this is converted to Python bool for the if condition.
+        in_set: bool = bool(np.all((x >= self.lower) & (x <= self.upper))) # Inclusive bounds for a box
+        if in_set:
+            return 0.0
+        else:
+            return np.inf
+
 
     @_check_tau
-    def prox(self, x, tau):
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        # tau is not used in projection for indicator function
         return self.box(x)

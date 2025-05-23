@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.special import lambertw
+from typing import Union, Any # Any for Optional Op in super().__init__
 
-from pyproximal.ProxOperator import _check_tau
-from pyproximal import ProxOperator
+from pyproximal.ProxOperator import _check_tau, ProxOperator
 
 
 class ETP(ProxOperator):
@@ -48,33 +48,63 @@ class ETP(ProxOperator):
 
     """
 
-    def __init__(self, sigma, gamma=1.0):
-        super().__init__(None, False)
+    def __init__(self, sigma: float, gamma: float = 1.0):
+        super().__init__(None, False) # Op is None, hasgrad is False
         if sigma < 0:
             raise ValueError('Variable "sigma" must be positive.')
         if gamma <= 0:
             raise ValueError('Variable "gamma" must be strictly positive.')
-        self.sigma = sigma
-        self.gamma = gamma
+        self.sigma: float = sigma
+        self.gamma: float = gamma
 
-    def __call__(self, x):
-        return np.sum(self.elementwise(x))
+    def __call__(self, x: np.ndarray) -> float: # Returns a scalar sum
+        return float(np.sum(self.elementwise(x)))
 
-    def elementwise(self, x):
+    def elementwise(self, x: np.ndarray) -> np.ndarray:
         return self.sigma / (1 - np.exp(-self.gamma)) * (1 - np.exp(-self.gamma * np.abs(x)))
 
     @_check_tau
-    def prox(self, x, tau):
-        k = tau * self.sigma / (1 - np.exp(-self.gamma))
-        out = np.zeros_like(x)
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        k: float = tau * self.sigma / (1 - np.exp(-self.gamma))
+        out: np.ndarray = np.zeros_like(x)
 
         # Get real-valued solutions to the Lambert W function
-        tmp = np.exp(-np.abs(x) * self.gamma) * k * self.gamma ** 2
-        idx = tmp <= np.exp(-1)
-        stat_points = np.sign(x[idx]) * np.real(lambertw(-tmp[idx])) / self.gamma + x[idx]
+        # Ensure operations are on np.ndarray to allow boolean indexing
+        abs_x_gamma: np.ndarray = np.abs(x) * self.gamma
+        tmp: np.ndarray = np.exp(-abs_x_gamma) * k * self.gamma ** 2
+        
+        # idx should be a boolean array of the same shape as x (or tmp)
+        idx: np.ndarray = tmp <= np.exp(-1)
+        
+        # Operations on slices
+        x_idx: np.ndarray = x[idx]
+        tmp_idx: np.ndarray = tmp[idx]
+        
+        # lambertw can return complex numbers, ensure we take real part.
+        # The output of lambertw will have the same shape as tmp_idx.
+        lambertw_result: np.ndarray = np.real(lambertw(-tmp_idx))
+        
+        stat_points: np.ndarray = np.sign(x_idx) * lambertw_result / self.gamma + x_idx
 
         # Check which stationary points are global minima
-        idx_minima = tau * self.elementwise(stat_points) + (stat_points - x[idx]) ** 2 / 2 < x[idx] ** 2 / 2
-        idx[idx] = idx_minima
-        out[idx] = stat_points[idx_minima]
+        # elementwise needs an array, ensure stat_points is correctly shaped if x_idx was empty
+        if stat_points.size > 0: # Avoid error if stat_points is empty
+            cost_stat_points: np.ndarray = tau * self.elementwise(stat_points) + \
+                                       (stat_points - x_idx) ** 2 / 2
+            cost_at_zero: np.ndarray = tau * self.elementwise(np.zeros_like(x_idx)) + \
+                                   (np.zeros_like(x_idx) - x_idx) ** 2 / 2 # Cost if z=0
+            # Original logic was comparing to x[idx]**2/2, which is cost at z=0 if ETP(0)=0.
+            # ETP(0) is indeed 0 based on its definition.
+            # So, comparing cost at stationary point vs cost at z=0.
+            idx_minima: np.ndarray = cost_stat_points < cost_at_zero
+            
+            # Update idx based on idx_minima: only those stationary points that are indeed minima
+            # Create a temporary boolean array of the same shape as idx
+            final_idx_update = np.zeros_like(idx, dtype=bool)
+            final_idx_update[idx] = idx_minima # Apply idx_minima only to the subset defined by original idx
+            
+            out[final_idx_update] = stat_points[idx_minima]
+        
+        # For elements not satisfying idx (i.e., tmp > exp(-1)) or where stat_point is not a minimum,
+        # the solution is z=0, which is already set by np.zeros_like(x).
         return out

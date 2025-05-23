@@ -1,8 +1,9 @@
 import numpy as np
 from scipy.optimize import bisect
+from typing import Union, Any, Tuple # Added Tuple
 
 
-class BoxProj():
+class BoxProj:
     r"""Box orthogonal projection.
 
     Parameters
@@ -35,16 +36,17 @@ class BoxProj():
     indicator function :math:`\mathcal{I}_{\operatorname{Box}_{[l, u]}}`.
 
     """
-    def __init__(self, lower=-np.inf, upper=np.inf):
-        self.lower = lower
-        self.upper = upper
+    def __init__(self, lower: Union[float, np.ndarray] = -np.inf,
+                 upper: Union[float, np.ndarray] = np.inf):
+        self.lower: Union[float, np.ndarray] = lower
+        self.upper: Union[float, np.ndarray] = upper
 
-    def __call__(self, x):
-        x = np.minimum(np.maximum(x, self.lower), self.upper)
-        return x
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        x_proj: np.ndarray = np.minimum(np.maximum(x, self.lower), self.upper)
+        return x_proj
 
 
-class HyperPlaneBoxProj():
+class HyperPlaneBoxProj:
     r"""Orthogonal projection of the intersection between a Hyperplane and a
     Box.
 
@@ -94,17 +96,19 @@ class HyperPlaneBoxProj():
         \mu \mathbf{c}) - b
 
     """
-    def __init__(self, coeffs, scalar, lower=-np.inf, upper=np.inf,
-                 maxiter=100, xtol=1e-5):
-        self.coeffs = coeffs.ravel()
-        self.scalar = scalar
-        self.lower = lower
-        self.upper = upper
-        self.maxiter = maxiter
-        self.xtol = xtol
-        self.box = BoxProj(lower, upper)
+    def __init__(self, coeffs: np.ndarray, scalar: float,
+                 lower: Union[float, np.ndarray] = -np.inf,
+                 upper: Union[float, np.ndarray] = np.inf,
+                 maxiter: int = 100, xtol: float = 1e-5):
+        self.coeffs: np.ndarray = coeffs.ravel()
+        self.scalar: float = scalar
+        self.lower: Union[float, np.ndarray] = lower
+        self.upper: Union[float, np.ndarray] = upper
+        self.maxiter: int = maxiter
+        self.xtol: float = xtol
+        self.box: BoxProj = BoxProj(lower, upper)
 
-    def __call__(self, x):
+    def __call__(self, x: np.ndarray) -> np.ndarray:
         """Apply HyperPlaneBoxProj projection
 
         Parameters
@@ -113,27 +117,29 @@ class HyperPlaneBoxProj():
             Vector
 
         """
-        def fun(mu, x):
-            return np.dot(self.coeffs, self.box(x - mu * self.coeffs)) - \
+        def fun(mu_val: float, x_val: np.ndarray) -> float:
+            return np.dot(self.coeffs, self.box(x_val - mu_val * self.coeffs)) - \
                    self.scalar
 
-        xshape = x.shape
-        x = x.ravel()
+        xshape: Tuple[int, ...] = x.shape
+        x_raveled: np.ndarray = x.ravel()
 
         # identify brackets for bisect ensuring that the evaluated fun
         # has different sign
-        bisect_lower = -1
-        while fun(bisect_lower, x) < 0:
+        bisect_lower: float = -1.0
+        while fun(bisect_lower, x_raveled) < 0:
             bisect_lower *= 2
 
-        bisect_upper = 1
-        while fun(bisect_upper, x) > 0:
+        bisect_upper: float = 1.0
+        while fun(bisect_upper, x_raveled) > 0:
             bisect_upper *= 2
 
         # find optimal mu
-        mu = bisect(lambda mu: fun(mu, x), bisect_lower, bisect_upper,
-                    maxiter=self.maxiter, xtol=self.xtol)
+        # bisect returns Any, so we cast to float
+        mu_opt: float = float(bisect(lambda mu_param: fun(mu_param, x_raveled),
+                                     bisect_lower, bisect_upper,
+                                     maxiter=self.maxiter, xtol=self.xtol))
 
         # compute projection
-        y = self.box(x - mu * self.coeffs)
+        y: np.ndarray = self.box(x_raveled - mu_opt * self.coeffs)
         return y.reshape(xshape)

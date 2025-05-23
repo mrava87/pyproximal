@@ -1,4 +1,7 @@
 import time
+import numpy as np
+from typing import Callable, Tuple, Any, Optional, Union
+
 from pyproximal.ProxOperator import _check_tau
 from pyproximal import ProxOperator
 from pyproximal.optimization.primal import ADMM
@@ -18,22 +21,26 @@ class _Denoise(ProxOperator):
         prior to calling the ``denoiser``
 
     """
-    def __init__(self, denoiser, dims):
+    def __init__(self, denoiser: Callable[[np.ndarray, float], np.ndarray],
+                 dims: Tuple[int, ...]):
         super().__init__(None, False)
-        self.denoiser = denoiser
-        self.dims = dims
+        self.denoiser: Callable[[np.ndarray, float], np.ndarray] = denoiser
+        self.dims: Tuple[int, ...] = dims
 
-    def __call__(self, x):
+    def __call__(self, x: np.ndarray) -> float: # Or Any if 0. is just a placeholder
         return 0.
 
     @_check_tau
-    def prox(self, x, tau):
-        x = x.reshape(self.dims)
-        xden = self.denoiser(x, tau)
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        x_reshaped: np.ndarray = x.reshape(self.dims)
+        xden: np.ndarray = self.denoiser(x_reshaped, tau)
         return xden.ravel()
 
 
-def PlugAndPlay(proxf, denoiser, dims, x0, solver=ADMM, **kwargs_solver):
+def PlugAndPlay(proxf: ProxOperator,
+                denoiser: Callable[[np.ndarray, float], np.ndarray],
+                dims: Tuple[int, ...], x0: np.ndarray, solver: Callable = ADMM,
+                **kwargs_solver: Any) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
     r"""Plug-and-Play Priors with any proximal algorithm of choice
 
     Solves the following minimization problem using any proximal a
@@ -109,6 +116,6 @@ def PlugAndPlay(proxf, denoiser, dims, x0, solver=ADMM, **kwargs_solver):
 
     """
     # Denoiser
-    proxpnp = _Denoise(denoiser, dims=dims)
+    proxpnp: _Denoise = _Denoise(denoiser, dims=dims)
 
     return solver(proxf, proxpnp, x0=x0, **kwargs_solver)

@@ -1,9 +1,18 @@
+from typing import Optional, List, Union, Any # For type hints
+import types # For ModuleType
+
 # scooby is a soft dependency for pyprox
 try:
-    from scooby import Report as ScoobyReport
+    from scooby import Report as ScoobyReport # type: ignore
 except ImportError:
-    class ScoobyReport:
-        def __init__(self, additional, core, optional, ncol, text_width, sort):
+    # Define a placeholder ScoobyReport if scooby is not installed
+    class ScoobyReport: # type: ignore
+        def __init__(self, additional: Optional[Union[types.ModuleType, List[types.ModuleType]]],
+                     core: List[str],
+                     optional: List[str],
+                     ncol: int,
+                     text_width: int,
+                     sort: bool) -> None:
             print("\nNOTE: `pyprox.Report` requires `scooby`. Install it via"
                   "\n      `pip install scooby` or "
                   "`conda install -c conda-forge scooby`.\n")
@@ -58,14 +67,32 @@ class Report(ScoobyReport):
 
     """
 
-    def __init__(self, add_pckg=None, ncol=3, text_width=80, sort=False):
+    def __init__(self, add_pckg: Optional[Union[types.ModuleType, List[types.ModuleType], str, List[str]]] = None,
+                 ncol: int = 3, text_width: int = 80, sort: bool = False) -> None:
         """Initiate a scooby.Report instance."""
 
         # Mandatory packages.
-        core = ['numpy', 'scipy', 'pylops', 'pyprox']
+        core: List[str] = ['numpy', 'scipy', 'pylops', 'pyprox']
 
         # Optional packages.
-        optional = ['IPython', 'matplotlib', 'numba']
+        optional: List[str] = ['IPython', 'matplotlib', 'numba']
+        
+        # ScoobyReport's 'additional' parameter can take a module, a list of modules,
+        # a package name string, or a list of package name strings.
+        # Our add_pckg should align with this.
+        processed_add_pckg: Any # Let Scooby handle the union of types for 'additional'
+        if add_pckg is None:
+            processed_add_pckg = None
+        elif isinstance(add_pckg, (types.ModuleType, str)) or \
+             (isinstance(add_pckg, list) and all(isinstance(item, (types.ModuleType, str)) for item in add_pckg)):
+            processed_add_pckg = add_pckg
+        else:
+            # If it's some other type, Scooby might handle it or raise an error.
+            # For stricter typing, one might raise a TypeError here for unsupported add_pckg types.
+            # However, Scooby's own typing for 'additional' is quite broad (Any).
+            # For now, pass it through.
+            processed_add_pckg = add_pckg
 
-        super().__init__(additional=add_pckg, core=core, optional=optional,
+
+        super().__init__(additional=processed_add_pckg, core=core, optional=optional,
                          ncol=ncol, text_width=text_width, sort=sort)

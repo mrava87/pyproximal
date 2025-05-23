@@ -1,7 +1,7 @@
 import numpy as np
+from typing import Tuple, Any # Any for Optional Op in super().__init__
 
-from pyproximal.ProxOperator import _check_tau
-from pyproximal import ProxOperator
+from pyproximal.ProxOperator import _check_tau, ProxOperator
 
 
 class Nonlinear(ProxOperator):
@@ -45,48 +45,67 @@ class Nonlinear(ProxOperator):
     which is done via the provided ``optimize`` method.
 
     """
-    def __init__(self, x0, niter=10, warm=True):
-        super().__init__(None, True)
-        self.niter = niter
-        self.x0 = x0
-        self.warm = warm
+    def __init__(self, x0: np.ndarray, niter: int = 10, warm: bool = True):
+        super().__init__(None, True) # Op is None, hasgrad is True
+        self.niter: int = niter
+        self.x0: np.ndarray = x0 # Initial guess for iterative solver in optimize
+        self.warm: bool = warm
+        self.y: np.ndarray # Stores x for prox: prox_tf(x) = argmin_u f(u) + 1/(2t)||u-x||^2
+        self.tau_prox: float # Stores tau for prox
 
-    def __call__(self, x):
+    def __call__(self, x: np.ndarray) -> float: # Assuming fun returns a scalar value
         return self.fun(x)
 
-    def _funprox(self, x, tau):
-        return self.fun(x) + 1. / (2 * tau) * ((x - self.y) ** 2).sum()
+    def _funprox(self, x: np.ndarray, tau: float) -> float:
+        # This method seems to be for internal use by an optimization algorithm.
+        # It evaluates f(x) + 1/(2*tau) * ||x - y||^2, where y is stored from prox call.
+        return self.fun(x) + 1. / (2 * tau) * float(np.sum((x - self.y)**2))
 
-    def _gradprox(self, x, tau):
+    def _gradprox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        # Gradient of f(x) + 1/(2*tau) * ||x - y||^2 w.r.t. x
         return self.grad(x) + 1. / tau * (x - self.y)
 
-    def _fungradprox(self, x, tau):
-        f, g = self.fungrad(x)
-        f = f + 1. / (2 * tau) * ((x - self.y) ** 2).sum()
-        g = g + 1. / tau * (x - self.y)
-        return f, g
+    def _fungradprox(self, x: np.ndarray, tau: float) -> Tuple[float, np.ndarray]:
+        # Returns (value, gradient) of f(x) + 1/(2*tau) * ||x - y||^2
+        f_val, g_val = self.fungrad(x)
+        f_val_prox: float = f_val + 1. / (2 * tau) * float(np.sum((x - self.y)**2))
+        g_val_prox: np.ndarray = g_val + 1. / tau * (x - self.y)
+        return f_val_prox, g_val_prox
 
-    def fun(self, x):
+    # Abstract methods to be implemented by subclasses
+    def fun(self, x: np.ndarray) -> float:
         raise NotImplementedError('The method fun has not been implemented.'
                                   'Refer to the documentation for details on '
                                   'how to subclass this operator.')
-    def grad(self, x):
+
+    def grad(self, x: np.ndarray) -> np.ndarray:
         raise NotImplementedError('The method grad has not been implemented.'
                                   'Refer to the documentation for details on '
                                   'how to subclass this operator.')
-    def fungrad(self, x):
-        raise NotImplementedError('The method grad has not been implemented.'
+
+    def fungrad(self, x: np.ndarray) -> Tuple[float, np.ndarray]:
+        # Should return (f(x), grad f(x))
+        raise NotImplementedError('The method fungrad has not been implemented.'
                                   'Refer to the documentation for details on '
-                                  'how to subclass this operator.')
-    def optimize(self):
+                                  'how to subclass this operator.') # Corrected error message
+
+    def optimize(self) -> np.ndarray:
+        # This method should solve the proximal optimization problem using
+        # self.y (the input to prox), self.tau_prox, self.x0 (initial guess), self.niter.
+        # It would typically use self._funprox, self._gradprox, or self._fungradprox.
         raise NotImplementedError('The method optimize has not been implemented.'
                                   'Refer to the documentation for details on '
                                   'how to subclass this operator.')
+
     @_check_tau
-    def prox(self, x, tau):
-        self.y = x
-        self.tau = tau
-        x = self.optimize()
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        self.y = x       # Store x (input to prox) as self.y for use in _funprox, etc.
+        self.tau_prox = tau # Store tau for use in _funprox, etc.
+        
+        # Call the user-defined optimization method
+        # The result of optimize() is the solution to the prox problem
+        x_optimized: np.ndarray = self.optimize()
+        
         if self.warm:
-            self.x0 = x
-        return x
+            self.x0 = x_optimized.copy() # Update initial guess for next prox call
+        return x_optimized

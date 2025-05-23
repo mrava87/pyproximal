@@ -1,13 +1,20 @@
 import time
 import numpy as np
+from typing import Callable, Optional, Any, Tuple, Dict, Union # Added Union
 
 from pylops import Gradient, BlockDiag
 from pyproximal import Simplex, L1, L21, VStack
 from pyproximal.optimization.primaldual import PrimalDual
+from pyproximal.ProxOperator import ProxOperator # For potential future use if proxs are passed
 
 
-def Segment(y, cl, sigma, alpha, clsigmas=None, z=None, niter=10, x0=None,
-            callback=None, show=False, kwargs_simplex=None):
+def Segment(y: np.ndarray, cl: np.ndarray, sigma: float, alpha: float,
+            clsigmas: Optional[np.ndarray] = None,
+            z: Optional[np.ndarray] = None, niter: int = 10,
+            x0: Optional[np.ndarray] = None,
+            callback: Optional[Callable[[np.ndarray], None]] = None,
+            show: bool = False,
+            kwargs_simplex: Optional[Dict[str, Any]] = None) -> Tuple[np.ndarray, np.ndarray]:
     r"""Primal-dual algorithm for image segmentation
 
     Perform image segmentation over :math:`N_{cl}` classes using the
@@ -73,44 +80,55 @@ def Segment(y, cl, sigma, alpha, clsigmas=None, z=None, niter=10, x0=None,
         Imaging and Vision, 40, 8pp. 120–145. 2011.
 
     """
-    kwargs_simplex = {} if kwargs_simplex is None else kwargs_simplex
+    current_kwargs_simplex: Dict[str, Any] = {} if kwargs_simplex is None else kwargs_simplex
 
-    dims = y.shape
-    ndims = len(dims)
-    dimsprod = np.prod(np.array(dims))
-    ncl = len(cl)
+    dims: Tuple[int, ...] = y.shape
+    ndims: int = len(dims)
+    dimsprod: int = np.prod(np.array(dims)).item() # Ensure scalar int
+    ncl: int = len(cl)
 
     # Data (difference between image and center of classes)
-    g = sigma / 2. * (y.reshape(1, dimsprod) - cl[:, np.newaxis]) ** 2
+    g_data: np.ndarray = sigma / 2. * (y.reshape(1, dimsprod) - cl[:, np.newaxis]) ** 2
     if clsigmas is not None:
-        g /= clsigmas[:, np.newaxis]
-    g = g.ravel()
+        g_data /= clsigmas[:, np.newaxis]
+    g_data = g_data.ravel()
 
     # Gradient operator
-    sampling = 1.
-    Gop = Gradient(dims=dims, sampling=sampling, edge=False,
-                   kind='forward', dtype='float64')
-    Gop = BlockDiag([Gop] * ncl)
+    sampling: float = 1.
+    # Assuming Gradient and BlockDiag are correctly typed or can be treated as Any for now
+    Gop: Any = Gradient(dims=dims, sampling=sampling, edge=False, # type: ignore
+                       kind='forward', dtype='float64')
+    Gop = BlockDiag([Gop] * ncl) # type: ignore
 
     # Simplex and L1 proximal operators
-    simp = Simplex(dimsprod * ncl, radius=1, dims=(ncl, dimsprod), axis=0,
-                   **kwargs_simplex)
+    simp: Simplex = Simplex(dimsprod * ncl, radius=1, dims=(ncl, dimsprod), axis=0, # type: ignore
+                            **current_kwargs_simplex)
     #l1 = L1(sigma=0.5 * alpha)
-    l21 = VStack([L21(ndim=ndims, sigma=0.5 * alpha)] * ncl,
-                 nn=[ndims * dimsprod] * ncl)
+    l21_op: VStack = VStack([L21(ndim=ndims, sigma=0.5 * alpha)] * ncl, # type: ignore
+                            nn=[ndims * dimsprod] * ncl)
 
     # Steps
-    L = 8. / sampling ** 2
-    tau = 1.
-    mu = 1. / (tau * L)
+    L_const: float = 8. / sampling ** 2
+    tau_step: float = 1.
+    mu_step: float = 1. / (tau_step * L_const)
 
     # Inversion
-    x = PrimalDual(simp, l21, Gop, tau=tau, mu=mu,
-                   z=g if z is None else g + z, theta=1.,
-                   x0=np.zeros_like(g) if x0 is None else x0,
+    # PrimalDual returns Union[np.ndarray, Tuple[np.ndarray, np.ndarray]], handle accordingly
+    x_pd_result: Union[np.ndarray, Tuple[np.ndarray, np.ndarray]] = \
+        PrimalDual(simp, l21_op, Gop,
+                   x0=np.zeros_like(g_data) if x0 is None else x0,
+                   tau=tau_step, mu=mu_step,
+                   z=g_data if z is None else g_data + z, theta=1.,
                    niter=niter, callback=callback, show=show)
-    x = x.reshape(ncl, dimsprod).T
-    cl = np.argmax(x, axis=1)
-    cl = cl.reshape(dims)
 
-    return x, cl
+    x_seg: np.ndarray
+    if isinstance(x_pd_result, tuple): # if returny=True was passed implicitly or by mistake
+        x_seg = x_pd_result[0]
+    else:
+        x_seg = x_pd_result
+
+    x_reshaped: np.ndarray = x_seg.reshape(ncl, dimsprod).T
+    cl_estimated: np.ndarray = np.argmax(x_reshaped, axis=1)
+    cl_reshaped: np.ndarray = cl_estimated.reshape(dims)
+
+    return x_reshaped, cl_reshaped

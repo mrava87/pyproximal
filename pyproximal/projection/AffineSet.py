@@ -1,10 +1,12 @@
-from scipy.sparse.linalg import lsqr as sp_lsqr
+import numpy as np
 from scipy.sparse.linalg import cg as sp_cg
-from pylops.optimization.basic import cg, lsqr
+from pylops.optimization.basic import cg
 from pylops.utils.backend import get_array_module, get_module_name
+from pylops.LinearOperator import LinearOperator
+from typing import Any, Tuple # Added Tuple
 
 
-class AffineSetProj():
+class AffineSetProj:
     r"""Affine set projection.
 
     Parameters
@@ -35,15 +37,23 @@ class AffineSetProj():
     indicator function :math:`I_{\{\mathbf{Opx}=\mathbf{b}\}}`
 
     """
-    def __init__(self, Op, b, niter):
-        self.Op = Op
-        self.b = b
-        self.niter = niter
+    def __init__(self, Op: LinearOperator, b: np.ndarray, niter: int):
+        self.Op: LinearOperator = Op
+        self.b: np.ndarray = b
+        self.niter: int = niter
 
-    def __call__(self, x):
-        if get_module_name(get_array_module(x)) == 'numpy':
-            inv = sp_cg(self.Op * self.Op.H, self.Op * x - self.b, maxiter=self.niter)[0]
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        # Determine if running with NumPy or CuPy and choose appropriate cg
+        xp = get_array_module(x)
+        if get_module_name(xp) == 'numpy':
+            # sp_cg returns a tuple (x, info)
+            inv_result: Tuple[np.ndarray, int] = sp_cg(self.Op * self.Op.H, self.Op @ x - self.b, maxiter=self.niter)
+            inv: np.ndarray = inv_result[0]
         else:
-            inv = cg(self.Op * self.Op.H, self.Op * x - self.b, niter=self.niter)[0]
-        y = x - self.Op.H * inv.ravel() # currently ravel is added to ensure that the output is always a vector
+            # pylops.optimization.basic.cg also returns a tuple (x, info)
+            inv_result_pylops: np.ndarray = cg(self.Op * self.Op.H, self.Op @ x - self.b, niter=self.niter)[0] # type: ignore
+            inv = inv_result_pylops # Assuming it's similar structure or direct result
+        # Ensure inv is 1D for proper broadcasting with Op.H if Op.H is a LinearOperator
+        # However, Op.H * vector should handle dimensions correctly if inv is shaped as expected by Op.H
+        y: np.ndarray = x - self.Op.H @ inv.ravel() # Using @ for matvec, ravel for safety
         return y

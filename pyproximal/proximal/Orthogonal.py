@@ -1,9 +1,9 @@
 import numpy as np
+from typing import Optional, Any, Union # Added Union
 
-from scipy.sparse.linalg import lsqr
-from pylops import MatrixMult, Identity
-from pyproximal.ProxOperator import _check_tau
-from pyproximal import ProxOperator
+# Remove unused scipy.sparse.linalg.lsqr and pylops.MatrixMult, pylops.Identity
+from pylops.LinearOperator import LinearOperator # For Q type
+from pyproximal.ProxOperator import _check_tau, ProxOperator
 
 
 class Orthogonal(ProxOperator):
@@ -57,31 +57,40 @@ class Orthogonal(ProxOperator):
         Deblurring", SIAM J. Imaging Sciences, vol. 7, pp. 1724–1754. 2014.
 
     """
-    def __init__(self, f, Q, partial=False, b=None, alpha=1.):
-        super().__init__(None, False)
-        self.f = f
-        self.Q = Q
-        self.partial = partial
-        self.alpha = alpha
-        self.b = b if b is not None else 0
+    def __init__(self, f: ProxOperator, Q: LinearOperator,
+                 partial: bool = False, b: Optional[np.ndarray] = None,
+                 alpha: float = 1.):
+        super().__init__(None, False) # Op is None, hasgrad depends on f, but prox is implemented
+        self.f: ProxOperator = f
+        self.Q: LinearOperator = Q
+        self.partial: bool = partial
+        self.alpha: float = alpha
+        self.b_offset: Union[np.ndarray, float] = b if b is not None else 0. # Renamed to avoid conflict
 
-    def __call__(self, x):
-        y = self.Q.matvec(x)
-        y += self.b
-        f = self.f(y)
-        return f
+    def __call__(self, x: np.ndarray) -> Any: # Return type depends on self.f.__call__
+        y: np.ndarray = self.Q.matvec(x)
+        y_offset: np.ndarray = y + self.b_offset # Apply offset
+        f_val: Any = self.f(y_offset) # Call the wrapped proximal operator's __call__
+        return f_val
 
     @_check_tau
-    def prox(self, x, tau):
-        y = self.Q.matvec(x)
+    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
+        y: np.ndarray = self.Q.matvec(x)
+        z: np.ndarray
         if self.partial:
+            # Ensure Q.rmatvec is callable and returns ndarray
+            # Ensure f.prox is callable and returns ndarray
+            # Ensure b_offset is compatible for subtraction if it's an array
+            prox_f_input: np.ndarray = y + self.b_offset
+            prox_f_output: np.ndarray = self.f.prox(prox_f_input, self.alpha * tau)
+            term_in_rmatvec: np.ndarray = prox_f_output - self.b_offset
+            
             z = (1. / self.alpha) * \
-                (self.alpha * x - self.Q.rmatvec(y) +
-                 self.Q.rmatvec(self.f.prox(y + self.b, self.alpha * tau) -
-                                self.b))
-        else:
-            y = y + self.b
-            z = self.f.prox(y, tau)
-            z = z - self.b
-            z = self.Q.rmatvec(z)
+                (self.alpha * x - self.Q.rmatvec(y) + # type: ignore
+                 self.Q.rmatvec(term_in_rmatvec)) # type: ignore
+        else: # Full orthogonality
+            y_offset_full: np.ndarray = y + self.b_offset
+            prox_f_output_full: np.ndarray = self.f.prox(y_offset_full, tau)
+            term_for_rmatvec_full: np.ndarray = prox_f_output_full - self.b_offset
+            z = self.Q.rmatvec(term_for_rmatvec_full) # type: ignore
         return z
