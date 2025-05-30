@@ -126,12 +126,13 @@ def test_L1(par):
 def test_L1_diff(par):
     """L1 norm of difference and proximal/dual proximal
     """
+    g = np.random.normal(0., 1., par['nx']).astype(par['dtype'])
     l1 = L1(sigma=par['sigma'],
-            g=np.random.normal(0., 1., par['nx']).astype(par['dtype']))
+            g=g)
 
     # norm
     x = np.random.normal(0., 1., par['nx']).astype(par['dtype'])
-    assert l1(x) == par['sigma'] * np.sum(np.abs(x))
+    assert l1(x) == par['sigma'] * np.sum(np.abs(x - g))
 
     # prox / dualprox
     tau = 2.

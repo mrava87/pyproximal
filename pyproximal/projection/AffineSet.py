@@ -1,9 +1,12 @@
+from typing import TYPE_CHECKING, Any, Tuple
+
 import numpy as np
 from scipy.sparse.linalg import cg as sp_cg
 from pylops.optimization.basic import cg
 from pylops.utils.backend import get_array_module, get_module_name
-from pylops.LinearOperator import LinearOperator
-from typing import Any, Tuple # Added Tuple
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class AffineSetProj:
@@ -37,8 +40,8 @@ class AffineSetProj:
     indicator function :math:`I_{\{\mathbf{Opx}=\mathbf{b}\}}`
 
     """
-    def __init__(self, Op: LinearOperator, b: np.ndarray, niter: int):
-        self.Op: LinearOperator = Op
+    def __init__(self, Op: "LinearOperator", b: np.ndarray, niter: int):
+        self.Op: "LinearOperator" = Op
         self.b: np.ndarray = b
         self.niter: int = niter
 

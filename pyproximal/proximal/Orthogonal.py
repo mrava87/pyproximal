@@ -1,9 +1,10 @@
 import numpy as np
-from typing import Optional, Any, Union # Added Union
+from typing import TYPE_CHECKING, Optional, Any, Union
 
-# Remove unused scipy.sparse.linalg.lsqr and pylops.MatrixMult, pylops.Identity
-from pylops.LinearOperator import LinearOperator # For Q type
 from pyproximal.ProxOperator import _check_tau, ProxOperator
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class Orthogonal(ProxOperator):
@@ -57,12 +58,12 @@ class Orthogonal(ProxOperator):
         Deblurring", SIAM J. Imaging Sciences, vol. 7, pp. 1724–1754. 2014.
 
     """
-    def __init__(self, f: ProxOperator, Q: LinearOperator,
+    def __init__(self, f: ProxOperator, Q: "LinearOperator",
                  partial: bool = False, b: Optional[np.ndarray] = None,
                  alpha: float = 1.):
         super().__init__(None, False) # Op is None, hasgrad depends on f, but prox is implemented
         self.f: ProxOperator = f
-        self.Q: LinearOperator = Q
+        self.Q: "LinearOperator" = Q
         self.partial: bool = partial
         self.alpha: float = alpha
         self.b_offset: Union[np.ndarray, float] = b if b is not None else 0. # Renamed to avoid conflict

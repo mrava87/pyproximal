@@ -1,8 +1,11 @@
+from typing import TYPE_CHECKING, Optional, Any
+
 import numpy as np
 from pyproximal.ProxOperator import _check_tau, ProxOperator
 from pyproximal.projection.AffineSet import AffineSetProj # Ensure correct import path
-from pylops.LinearOperator import LinearOperator # For Op type
-from typing import Optional, Any
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class AffineSet(ProxOperator):
@@ -26,7 +29,7 @@ class AffineSet(ProxOperator):
     details.
 
     """
-    def __init__(self, Op: LinearOperator, b: np.ndarray, niter: int):
+    def __init__(self, Op: "LinearOperator", b: np.ndarray, niter: int):
         super().__init__(Op, False) # hasgrad is False for indicator functions
         self.b: np.ndarray = b
         self.niter: int = niter

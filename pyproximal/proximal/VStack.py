@@ -1,7 +1,10 @@
+from typing import TYPE_CHECKING, Any, List, Optional
+
 import numpy as np
-from typing import List, Optional, Any # Added List, Optional, Any
-from pylops.LinearOperator import LinearOperator # For Restriction operator type
 from pyproximal.ProxOperator import _check_tau, ProxOperator
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class VStack(ProxOperator):
@@ -43,7 +46,7 @@ class VStack(ProxOperator):
     """
     def __init__(self, ops: List[ProxOperator],
                  nn: Optional[List[int]] = None,
-                 restr: Optional[List[LinearOperator]] = None):
+                 restr: Optional[List["LinearOperator"]] = None):
         super().__init__(None, False) # Op is None, hasgrad depends on stacked ops
         if nn is None and restr is None:
             raise ValueError('provide either nn or restr')

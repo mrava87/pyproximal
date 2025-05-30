@@ -1,14 +1,16 @@
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 import time
 import numpy as np
 from copy import deepcopy
-from typing import Callable, Optional, Any, Tuple, Union # Added Union
 
 from pyproximal.ProxOperator import ProxOperator
-from pylops.LinearOperator import LinearOperator
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 def Bregman(proxf: ProxOperator, proxg: ProxOperator, x0: np.ndarray,
-            solver: Callable, A: Optional[LinearOperator] = None,
+            solver: Callable, A: Optional["LinearOperator"] = None,
             alpha: float = 1., niterouter: int = 10,
             warm: bool = False, tolx: float = 1e-10, tolf: float = 1e-10,
             bregcallback: Optional[Callable[[np.ndarray], None]] = None,

@@ -1,6 +1,9 @@
+from typing import TYPE_CHECKING, Optional, Any, Tuple
+
 import numpy as np
-from typing import Optional, Any, Tuple # Added Optional, Any, Tuple
-from pylops.LinearOperator import LinearOperator # For Op type hint
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class BilinearOperator:
@@ -134,7 +137,7 @@ class LowRankFactorizedMatrix(BilinearOperator):
 
     """
     def __init__(self, X: np.ndarray, Y: np.ndarray, d: np.ndarray,
-                 Op: Optional[LinearOperator] = None) -> None:
+                 Op: Optional["LinearOperator"] = None) -> None:
         super().__init__() # Call BilinearOperator's __init__
         self.n: int
         self.k: int
@@ -144,7 +147,7 @@ class LowRankFactorizedMatrix(BilinearOperator):
         self.x: np.ndarray = X # This is X_mat
         self.y: np.ndarray = Y # This is Y_mat
         self.d: np.ndarray = d
-        self.Op: Optional[LinearOperator] = Op
+        self.Op: Optional["LinearOperator"] = Op
         self.sizex: int = self.n * self.k
         self.sizey: int = self.m * self.k
 

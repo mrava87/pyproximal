@@ -1,13 +1,17 @@
+from typing import TYPE_CHECKING, Optional, Union, Callable, Any, Dict, Tuple
+
 import numpy as np
 from scipy.linalg import cho_factor, cho_solve
 from scipy.sparse.linalg import lsqr as sp_lsqr
-from pylops import MatrixMult, Identity # type: ignore # Assuming these are LinearOperator or similar
-from pylops.LinearOperator import LinearOperator # Explicit import for Op type
-from pylops.optimization.basic import lsqr # type: ignore # Assuming lsqr returns ndarray or tuple
+from pylops import MatrixMult, Identity
+from pylops.optimization.basic import lsqr
 from pylops.utils.backend import get_array_module, get_module_name
-from typing import Optional, Union, Callable, Any, Dict, Tuple
 
 from pyproximal.ProxOperator import _check_tau, ProxOperator
+
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class L2(ProxOperator):
@@ -94,7 +98,7 @@ class L2(ProxOperator):
     iterations are used alongside a proximal solver.
 
     """
-    def __init__(self, Op: Optional[LinearOperator] = None,
+    def __init__(self, Op: Optional["LinearOperator"] = None,
                  b: Optional[np.ndarray] = None,
                  q: Optional[np.ndarray] = None,
                  sigma: float = 1., alpha: float = 1.,
@@ -172,7 +176,7 @@ class L2(ProxOperator):
             if self.Op.explicit and self.ATA is not None:
                 if self.densesolver != 'factorize':
                     # Assuming MatrixMult and Identity are LinearOperator like
-                    Op1_explicit: LinearOperator = MatrixMult(np.eye(self.Op.shape[1]) + \
+                    Op1_explicit: "LinearOperator" = MatrixMult(np.eye(self.Op.shape[1]) + \
                                              tau * self.sigma * self.ATA) # type: ignore
                     if self.densesolver is None:
                         current_x = Op1_explicit.div(y) # type: ignore
@@ -186,7 +190,7 @@ class L2(ProxOperator):
                         self.cl = cho_factor(ATA_factor)
                     current_x = cho_solve(self.cl, y)
             else: # Implicit operator
-                Op1_implicit: LinearOperator = Identity(self.Op.shape[1], dtype=self.Op.dtype) + \
+                Op1_implicit: "LinearOperator" = Identity(self.Op.shape[1], dtype=self.Op.dtype) + \
                                    float(tau * self.sigma) * (self.Op.H * self.Op) # type: ignore
                 
                 # Determine backend for lsqr

@@ -3,10 +3,10 @@ import numpy as np
 from typing import Callable, Optional, Any, List, Tuple
 
 from pyproximal.ProxOperator import ProxOperator
-from pyproximal.utils.bilinear import Bilinear
+from pyproximal.utils.bilinear import BilinearOperator
 
 
-def _backtracking(x: List[np.ndarray], tau: float, H: Bilinear,
+def _backtracking(x: List[np.ndarray], tau: float, H: BilinearOperator,
                   proxf: Optional[ProxOperator], ix: int, beta: float = 0.5,
                   niterback: int = 10) -> Tuple[np.ndarray, float]:
     r"""Backtracking
@@ -16,7 +16,7 @@ def _backtracking(x: List[np.ndarray], tau: float, H: Bilinear,
     estimate).
 
     """
-    def ftilde(x_val: np.ndarray, y_val: List[np.ndarray], f_op: Bilinear,
+    def ftilde(x_val: np.ndarray, y_val: List[np.ndarray], f_op: BilinearOperator,
                g_val: np.ndarray, tau_val: float, ix_val: int) -> float:
         xy: np.ndarray = x_val - y_val[ix_val]
         return f_op(*y_val) + np.dot(g_val, xy) + \
@@ -42,7 +42,7 @@ def _backtracking(x: List[np.ndarray], tau: float, H: Bilinear,
     return z[ix], tau
 
 
-def PALM(H: Bilinear, proxf: Optional[ProxOperator],
+def PALM(H: BilinearOperator, proxf: Optional[ProxOperator],
          proxg: Optional[ProxOperator], x0: np.ndarray, y0: np.ndarray,
          gammaf: Optional[float] = 1., gammag: Optional[float] = 1.,
          beta: float = 0.5, niter: int = 10, niterback: int = 100,
@@ -200,7 +200,7 @@ def PALM(H: Bilinear, proxf: Optional[ProxOperator],
     return x, y
 
 
-def iPALM(H: Bilinear, proxf: Optional[ProxOperator],
+def iPALM(H: BilinearOperator, proxf: Optional[ProxOperator],
           proxg: Optional[ProxOperator], x0: np.ndarray, y0: np.ndarray,
           gammaf: Optional[float] = 1., gammag: Optional[float] = 1.,
           a: List[float] = [1., 1.], b: Optional[Any] = None, # b is unused, type Any

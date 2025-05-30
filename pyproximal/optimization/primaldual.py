@@ -1,13 +1,16 @@
+from typing import TYPE_CHECKING, Callable, Optional, Any, Union, Tuple
+
 import time
 import numpy as np
-from typing import Callable, Optional, Any, Union, Tuple
 
 from pylops.utils.backend import get_array_module, to_numpy
-from pylops.LinearOperator import LinearOperator
 from pyproximal.ProxOperator import ProxOperator
 
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
-def PrimalDual(proxf: ProxOperator, proxg: ProxOperator, A: LinearOperator,
+
+def PrimalDual(proxf: ProxOperator, proxg: ProxOperator, A: "LinearOperator",
                x0: np.ndarray, tau: Union[float, np.ndarray],
                mu: Union[float, np.ndarray], y0: Optional[np.ndarray] = None,
                z: Optional[np.ndarray] = None, theta: float = 1.,
@@ -212,7 +215,7 @@ def PrimalDual(proxf: ProxOperator, proxg: ProxOperator, A: LinearOperator,
         return x, y
 
 
-def AdaptivePrimalDual(proxf: ProxOperator, proxg: ProxOperator, A: LinearOperator,
+def AdaptivePrimalDual(proxf: ProxOperator, proxg: ProxOperator, A: "LinearOperator",
                        x0: np.ndarray, tau: float, mu: float,
                        alpha: float = 0.5, eta: float = 0.95, s: float = 1.,
                        delta: float = 1.5, z: Optional[np.ndarray] = None,

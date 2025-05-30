@@ -1,11 +1,13 @@
 import numpy as np
-from typing import Optional, Any, Union, Tuple # Added Union and Tuple
+from typing import TYPE_CHECKING, Optional, Any, Union, Tuple
 
 from scipy.sparse.linalg import lsqr as sp_lsqr # Keep scipy lsqr for numpy case
 from pylops import MatrixMult, Identity # type: ignore # Assuming these are LinearOperator or similar
-from pylops.LinearOperator import LinearOperator # Explicit import for Op type
 from pylops.optimization.basic import lsqr as pylops_lsqr # pylops lsqr for cupy
 from pyproximal.ProxOperator import _check_tau, ProxOperator
+
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
 
 
 class Quadratic(ProxOperator):
@@ -65,7 +67,7 @@ class Quadratic(ProxOperator):
 
 
     """
-    def __init__(self, Op: Optional[LinearOperator] = None,
+    def __init__(self, Op: Optional["LinearOperator"] = None,
                  b: Optional[np.ndarray] = None, c: float = 0.,
                  niter: int = 10, x0: Optional[np.ndarray] = None,
                  warm: bool = True):
