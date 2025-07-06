@@ -1,10 +1,10 @@
-import time
-import numpy as np
-from typing import Callable, Tuple, Any, Optional, Union
+from typing import TYPE_CHECKING, Callable, Tuple, Any, Union
 
-from pyproximal.ProxOperator import _check_tau
-from pyproximal import ProxOperator
+from pylops.utils.typing import NDArray, ShapeLike
+
+from pyproximal.ProxOperator import _check_tau, ProxOperator
 from pyproximal.optimization.primal import ADMM
+
 
 
 class _Denoise(ProxOperator):
@@ -21,26 +21,28 @@ class _Denoise(ProxOperator):
         prior to calling the ``denoiser``
 
     """
-    def __init__(self, denoiser: Callable[[np.ndarray, float], np.ndarray],
-                 dims: Tuple[int, ...]):
+    def __init__(self, denoiser: Callable[[NDArray, float], NDArray],
+                 dims: ShapeLike):
         super().__init__(None, False)
-        self.denoiser: Callable[[np.ndarray, float], np.ndarray] = denoiser
-        self.dims: Tuple[int, ...] = dims
+        self.denoiser: Callable[[NDArray, float], NDArray] = denoiser
+        self.dims: ShapeLike = dims
 
-    def __call__(self, x: np.ndarray) -> float: # Or Any if 0. is just a placeholder
+    def __call__(self, x: NDArray) -> float: 
+        """This is just a placeholder, as for PnP the functional is not properly 
+        defined so one cannot compute its value: f(x)
+        """
         return 0.
 
     @_check_tau
-    def prox(self, x: np.ndarray, tau: float) -> np.ndarray:
-        x_reshaped: np.ndarray = x.reshape(self.dims)
-        xden: np.ndarray = self.denoiser(x_reshaped, tau)
+    def prox(self, x: NDArray, tau: float) -> NDArray:
+        xden: NDArray = self.denoiser(x.reshape(self.dims), tau)
         return xden.ravel()
 
 
 def PlugAndPlay(proxf: ProxOperator,
-                denoiser: Callable[[np.ndarray, float], np.ndarray],
-                dims: Tuple[int, ...], x0: np.ndarray, solver: Callable = ADMM,
-                **kwargs_solver: Any) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+                denoiser: Callable[[NDArray, float], NDArray],
+                dims: ShapeLike, x0: NDArray, solver: Callable = ADMM,
+                **kwargs_solver: Any) -> Union[NDArray, Tuple[NDArray, ...]]:
     r"""Plug-and-Play Priors with any proximal algorithm of choice
 
     Solves the following minimization problem using any proximal a

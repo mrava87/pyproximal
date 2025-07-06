@@ -1,6 +1,8 @@
+from typing import Tuple, Union
 import numpy as np
+
 from scipy.optimize import bisect
-from typing import Union, Any, Tuple # Added Tuple
+from pylops.utils.typing import NDArray, ShapeLike
 
 
 class BoxProj:
@@ -8,9 +10,9 @@ class BoxProj:
 
     Parameters
     ----------
-    lower : :obj:`float` or :obj:`np.ndarray`, optional
+    lower : :obj:`float` or :obj:`numpy.ndarray`, optional
         Lower bound
-    upper : :obj:`float` or :obj:`np.ndarray`, optional
+    upper : :obj:`float` or :obj:`numpy.ndarray`, optional
         Upper bound
 
     Notes
@@ -36,13 +38,13 @@ class BoxProj:
     indicator function :math:`\mathcal{I}_{\operatorname{Box}_{[l, u]}}`.
 
     """
-    def __init__(self, lower: Union[float, np.ndarray] = -np.inf,
-                 upper: Union[float, np.ndarray] = np.inf):
-        self.lower: Union[float, np.ndarray] = lower
-        self.upper: Union[float, np.ndarray] = upper
+    def __init__(self, lower: Union[float, NDArray] = -np.inf,
+                 upper: Union[float, NDArray] = np.inf):
+        self.lower: Union[float, NDArray] = lower
+        self.upper: Union[float, NDArray] = upper
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
-        x_proj: np.ndarray = np.minimum(np.maximum(x, self.lower), self.upper)
+    def __call__(self, x: NDArray) -> NDArray:
+        x_proj: NDArray = np.minimum(np.maximum(x, self.lower), self.upper)
         return x_proj
 
 
@@ -52,13 +54,13 @@ class HyperPlaneBoxProj:
 
     Parameters
     ----------
-    coeffs : :obj:`np.ndarray`
+    coeffs : :obj:`numpy.ndarray`
         Vector of coefficients used in the definition of the hyperplane
     scalar : :obj:`float`
         Scalar used in the definition of the hyperplane
-    lower : :obj:`float` or :obj:`np.ndarray`, optional
+    lower : :obj:`float` or :obj:`numpy.ndarray`, optional
         Lower bound of Box
-    upper : :obj:`float` or :obj:`np.ndarray`, optional
+    upper : :obj:`float` or :obj:`numpy.ndarray`, optional
         Upper bound of Box
     maxiter : :obj:`int`, optional
         Maximum number of iterations used by :func:`scipy.optimize.bisect`
@@ -96,33 +98,33 @@ class HyperPlaneBoxProj:
         \mu \mathbf{c}) - b
 
     """
-    def __init__(self, coeffs: np.ndarray, scalar: float,
-                 lower: Union[float, np.ndarray] = -np.inf,
-                 upper: Union[float, np.ndarray] = np.inf,
+    def __init__(self, coeffs: NDArray, scalar: float,
+                 lower: Union[float, NDArray] = -np.inf,
+                 upper: Union[float, NDArray] = np.inf,
                  maxiter: int = 100, xtol: float = 1e-5):
-        self.coeffs: np.ndarray = coeffs.ravel()
+        self.coeffs: NDArray = coeffs.ravel()
         self.scalar: float = scalar
-        self.lower: Union[float, np.ndarray] = lower
-        self.upper: Union[float, np.ndarray] = upper
+        self.lower: Union[float, NDArray] = lower
+        self.upper: Union[float, NDArray] = upper
         self.maxiter: int = maxiter
         self.xtol: float = xtol
-        self.box: BoxProj = BoxProj(lower, upper)
+        self.box = BoxProj(lower, upper)
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: NDArray) -> NDArray:
         """Apply HyperPlaneBoxProj projection
 
         Parameters
         ----------
-        x : :obj:`np.ndarray`
+        x : :obj:`numpy.ndarray`
             Vector
 
         """
-        def fun(mu_val: float, x_val: np.ndarray) -> float:
-            return np.dot(self.coeffs, self.box(x_val - mu_val * self.coeffs)) - \
+        def fun(mu: float, x: NDArray) -> float:
+            return np.dot(self.coeffs, self.box(x - mu * self.coeffs)) - \
                    self.scalar
 
-        xshape: Tuple[int, ...] = x.shape
-        x_raveled: np.ndarray = x.ravel()
+        xshape: ShapeLike = x.shape
+        x_raveled: NDArray = x.ravel()
 
         # identify brackets for bisect ensuring that the evaluated fun
         # has different sign
@@ -136,10 +138,10 @@ class HyperPlaneBoxProj:
 
         # find optimal mu
         # bisect returns Any, so we cast to float
-        mu_opt: float = float(bisect(lambda mu_param: fun(mu_param, x_raveled),
+        mu_opt: float = float(bisect(lambda mu: fun(mu, x_raveled),
                                      bisect_lower, bisect_upper,
                                      maxiter=self.maxiter, xtol=self.xtol))
 
         # compute projection
-        y: np.ndarray = self.box(x_raveled - mu_opt * self.coeffs)
+        y: NDArray = self.box(x_raveled - mu_opt * self.coeffs)
         return y.reshape(xshape)

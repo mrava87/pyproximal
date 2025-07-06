@@ -32,7 +32,6 @@ from .utils.utils import Report
 from . import proximal
 from . import optimization
 
-# Typing for __version__
 __version__: str
 
 try:

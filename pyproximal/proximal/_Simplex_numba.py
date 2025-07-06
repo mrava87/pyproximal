@@ -32,19 +32,19 @@ def bisect_jit(x: np.ndarray, coeffs: np.ndarray, scalar: float,
 
     Parameters
     ----------
-    x : :obj:`np.ndarray`
+    x : :obj:`numpy.ndarray`
         Input vector
-    coeffs : :obj:`np.ndarray`
+    coeffs : :obj:`numpy.ndarray`
         Vector of coefficients used in the definition of the hyperplane
     scalar : :obj:`float`
         Scalar used in the definition of the hyperplane
-    lower : :obj:`float` or :obj:`np.ndarray`, optional
+    lower : :obj:`float` or :obj:`numpy.ndarray`, optional
         Lower bound of Box
-    upper : :obj:`float` or :obj:`np.ndarray`, optional
+    upper : :obj:`float` or :obj:`numpy.ndarray`, optional
         Upper bound of Box
-    bisect_lower : :obj:`float` or :obj:`np.ndarray`, optional
+    bisect_lower : :obj:`float` or :obj:`numpy.ndarray`, optional
         Lower end of bisection
-    bisect_upper : :obj:`float` or :obj:`np.ndarray`, optional
+    bisect_upper : :obj:`float` or :obj:`numpy.ndarray`, optional
         Upper end of bisection
     maxiter : :obj:`int`, optional
         Maximum number of iterations
@@ -83,15 +83,15 @@ def simplex_jit(x: np.ndarray, coeffs: np.ndarray, scalar: float,
 
     Parameters
     ----------
-    x : :obj:`np.ndarray`
+    x : :obj:`numpy.ndarray`
         Input vector
-    coeffs : :obj:`np.ndarray`
+    coeffs : :obj:`numpy.ndarray`
         Vector of coefficients used in the definition of the hyperplane
     scalar : :obj:`float`
         Scalar used in the definition of the hyperplane
-    lower : :obj:`float` or :obj:`np.ndarray`, optional
+    lower : :obj:`float` or :obj:`numpy.ndarray`, optional
         Lower bound of Box
-    upper : :obj:`float` or :obj:`np.ndarray`, optional
+    upper : :obj:`float` or :obj:`numpy.ndarray`, optional
         Upper bound of Box
     maxiter : :obj:`int`, optional
         Maximum number of iterations

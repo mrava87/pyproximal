@@ -41,7 +41,7 @@ class L2(ProxOperator):
         This can be a constant number or a function that is called passing a
         counter which keeps track of how many times the ``prox`` method has
         been invoked before and returns the ``niter`` to be used.
-    x0 : :obj:`np.ndarray`, optional
+    x0 : :obj:`numpy.ndarray`, optional
         Initial vector
     warm : :obj:`bool`, optional
         Warm start (``True``) or not (``False``). Uses estimate from previous
@@ -242,7 +242,7 @@ class L2Convolve(ProxOperator):
 
     Parameters
     ----------
-    h : :obj:`np.ndarray`, optional
+    h : :obj:`numpy.ndarray`, optional
         Kernel of convolution operator
     b : :obj:`numpy.ndarray`, optional
         Data vector

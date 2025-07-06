@@ -1,14 +1,17 @@
+from typing import Callable, Optional, Any, List, Tuple
+
 import time
 import numpy as np
-from typing import Callable, Optional, Any, List, Tuple
+
+from pylops.utils.typing import NDArray
 
 from pyproximal.ProxOperator import ProxOperator
 from pyproximal.utils.bilinear import BilinearOperator
 
 
-def _backtracking(x: List[np.ndarray], tau: float, H: BilinearOperator,
+def _backtracking(x: List[NDArray], tau: float, H: BilinearOperator,
                   proxf: Optional[ProxOperator], ix: int, beta: float = 0.5,
-                  niterback: int = 10) -> Tuple[np.ndarray, float]:
+                  niterback: int = 10) -> Tuple[NDArray, float]:
     r"""Backtracking
 
     Line-search algorithm for finding step sizes in palm algorithms when
@@ -16,26 +19,26 @@ def _backtracking(x: List[np.ndarray], tau: float, H: BilinearOperator,
     estimate).
 
     """
-    def ftilde(x_val: np.ndarray, y_val: List[np.ndarray], f_op: BilinearOperator,
-               g_val: np.ndarray, tau_val: float, ix_val: int) -> float:
-        xy: np.ndarray = x_val - y_val[ix_val]
-        return f_op(*y_val) + np.dot(g_val, xy) + \
-               (1. / (2. * tau_val)) * np.linalg.norm(xy) ** 2
+    def ftilde(x: NDArray, y: List[NDArray], f_op: BilinearOperator,
+               g: NDArray, tau: float, ix: int) -> float:
+        xy: NDArray = x - y[ix]
+        return f_op(*y) + np.dot(g, xy) + \
+               (1. / (2. * tau)) * np.linalg.norm(xy) ** 2
 
     iiterback: int = 0
-    grad: np.ndarray
+    grad: NDArray
     if ix == 0:
         grad = H.gradx(x[ix])
     else:
         grad = H.grady(x[ix])
-    z: List[np.ndarray] = [x_.copy() for x_ in x]
+    z: List[NDArray] = [x_.copy() for x_ in x]
     while iiterback < niterback:
         z[ix] = x[ix] - tau * grad
         if proxf is not None:
             z[ix] = proxf.prox(z[ix], tau)
         ft: float = ftilde(z[ix], x, H, grad, tau, ix)
-        f_val: float = H(*z)
-        if f_val <= ft or tau < 1e-12:
+        f: float = H(*z)
+        if f <= ft or tau < 1e-12:
             break
         tau *= beta
         iiterback += 1
@@ -43,11 +46,11 @@ def _backtracking(x: List[np.ndarray], tau: float, H: BilinearOperator,
 
 
 def PALM(H: BilinearOperator, proxf: Optional[ProxOperator],
-         proxg: Optional[ProxOperator], x0: np.ndarray, y0: np.ndarray,
+         proxg: Optional[ProxOperator], x0: NDArray, y0: NDArray,
          gammaf: Optional[float] = 1., gammag: Optional[float] = 1.,
          beta: float = 0.5, niter: int = 10, niterback: int = 100,
-         callback: Optional[Callable[[np.ndarray, np.ndarray], None]] = None,
-         show: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+         callback: Optional[Callable[[NDArray, NDArray], None]] = None,
+         show: bool = False) -> Tuple[NDArray, NDArray]:
     r"""Proximal Alternating Linearized Minimization
 
     Solves the following minimization problem using the Proximal Alternating
@@ -98,7 +101,12 @@ def PALM(H: BilinearOperator, proxf: Optional[ProxOperator],
         Inverted x vector
     y : :obj:`numpy.ndarray`
         Inverted y vector
-
+    
+    Raises
+    ------
+    ValueError
+        If `gammaf` or `gammag` is `None` but backtracking is not enabled.
+    
     Notes
     -----
     PALM [1]_ can be expressed by the following recursion:
@@ -142,16 +150,16 @@ def PALM(H: BilinearOperator, proxf: Optional[ProxOperator],
 
     if gammaf is None:
         backtrackingf = True
-    if gammag is None: # Corrected from gammaf to gammag
+    if gammag is None:
         backtrackingg = True
 
-    x: np.ndarray = x0.copy()
-    y: np.ndarray = y0.copy()
+    x: NDArray = x0.copy()
+    y: NDArray = y0.copy()
 
     for iiter in range(niter):
         # x step
         if not backtrackingf:
-            if gammaf is None: # Should not happen if backtrackingf is False
+            if gammaf is None:
                 raise ValueError("gammaf cannot be None if not backtracking")
             ck = gammaf * H.ly(y)
             x = x - (1. / ck) * H.gradx(x)
@@ -166,17 +174,14 @@ def PALM(H: BilinearOperator, proxf: Optional[ProxOperator],
 
         # y step
         if not backtrackingg:
-            if gammag is None: # Should not happen if backtrackingg is False
+            if gammag is None:
                 raise ValueError("gammag cannot be None if not backtracking")
             dk = gammag * H.lx(x)
             y = y - (1. / dk) * H.grady(y)
             if proxg is not None:
                 y = proxg.prox(y, 1. / dk)
         else:
-            # The original code used tauf for the y step's backtracking.
-            # Assuming it should be taug, but keeping tauf to match original logic.
-            # If this is a bug, it should be addressed separately.
-            y, taug = _backtracking([x, y], tauf, H, # Corrected proxf to proxg for y step
+            y, taug = _backtracking([x, y], taug, H,
                                     proxg, 1, beta=beta,
                                     niterback=niterback)
         # update y parameter in H function
@@ -201,12 +206,12 @@ def PALM(H: BilinearOperator, proxf: Optional[ProxOperator],
 
 
 def iPALM(H: BilinearOperator, proxf: Optional[ProxOperator],
-          proxg: Optional[ProxOperator], x0: np.ndarray, y0: np.ndarray,
+          proxg: Optional[ProxOperator], x0: NDArray, y0: NDArray,
           gammaf: Optional[float] = 1., gammag: Optional[float] = 1.,
           a: List[float] = [1., 1.], b: Optional[Any] = None, # b is unused, type Any
           beta: float = 0.5, niter: int = 10, niterback: int = 100,
-          callback: Optional[Callable[[np.ndarray, np.ndarray], None]] = None,
-          show: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+          callback: Optional[Callable[[NDArray, NDArray], None]] = None,
+          show: bool = False) -> Tuple[NDArray, NDArray]:
     r"""Inertial Proximal Alternating Linearized Minimization
 
     Solves the following minimization problem using the Inertial Proximal
@@ -260,6 +265,11 @@ def iPALM(H: BilinearOperator, proxf: Optional[ProxOperator],
     y : :obj:`numpy.ndarray`
         Inverted y vector
 
+    Raises
+    ------
+    ValueError
+        If `gammaf` or `gammag` is `None` but backtracking is not enabled.
+    
     Notes
     -----
     iPALM [1]_ can be expressed by the following recursion:
@@ -309,19 +319,19 @@ def iPALM(H: BilinearOperator, proxf: Optional[ProxOperator],
 
     if gammaf is None:
         backtrackingf = True
-    if gammag is None: # Corrected from gammaf to gammag
+    if gammag is None:
         backtrackingg = True
 
-    x: np.ndarray = x0.copy()
-    y: np.ndarray = y0.copy()
-    xold: np.ndarray = x0.copy()
-    yold: np.ndarray = y0.copy()
+    x: NDArray = x0.copy()
+    y: NDArray = y0.copy()
+    xold: NDArray = x0.copy()
+    yold: NDArray = y0.copy()
 
     for iiter in range(niter):
         # x step
-        z_x: np.ndarray = x + a[0] * (x - xold)
+        z_x: NDArray = x + a[0] * (x - xold)
         if not backtrackingf:
-            if gammaf is None: # Should not happen if backtrackingf is False
+            if gammaf is None:
                 raise ValueError("gammaf cannot be None if not backtracking")
             ck = gammaf * H.ly(y)
             xold = x.copy()
@@ -337,9 +347,9 @@ def iPALM(H: BilinearOperator, proxf: Optional[ProxOperator],
         H.updatex(x.copy())
 
         # y step
-        z_y: np.ndarray = y + a[1] * (y - yold)
+        z_y: NDArray = y + a[1] * (y - yold)
         if not backtrackingg:
-            if gammag is None: # Should not happen if backtrackingg is False
+            if gammag is None:
                 raise ValueError("gammag cannot be None if not backtracking")
             dk = gammag * H.lx(x)
             yold = y.copy()

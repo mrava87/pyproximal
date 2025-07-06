@@ -1,9 +1,19 @@
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
+
 import numpy as np
 import pylops
+
 from scipy.sparse.linalg import lsqr as sp_lsqr
+from pylops.utils.typing import NDArray
 
 
-def _lsqr(Op, data, iter_lim, z_old, x0, kappa, eps, Reg):
+if TYPE_CHECKING:
+    from pylops.linearoperator import LinearOperator
+
+
+def _lsqr(Op: "LinearOperator", data: NDArray, 
+          iter_lim: int, z_old: NDArray, x0: NDArray, 
+          kappa: float, eps: float, Reg: "LinearOperator"):
     r"""LSQR
 
     This function uses LSQR to solve the inner iteration of SR3, given by
@@ -26,7 +36,7 @@ def _lsqr(Op, data, iter_lim, z_old, x0, kappa, eps, Reg):
         Data
     iter_lim: :obj:`int`
         Maximum number of iterations
-    z_old: :obj:`np.ndarray`
+    z_old: :obj:`numpy.ndarray`
         The previous outer iteration
     x0: :obj:`numpy.ndarray`
        initial guess
@@ -34,7 +44,7 @@ def _lsqr(Op, data, iter_lim, z_old, x0, kappa, eps, Reg):
         The regularization parameter for the inner iteration
     eps: :obj:`float`
         The regularization parameter for the outer iteration
-    Reg: :obj:`np.ndarray`
+    Reg: :obj:`pylops.LinearOperator`
         The regularization operator L
 
     Returns
@@ -77,8 +87,12 @@ def _lsqr(Op, data, iter_lim, z_old, x0, kappa, eps, Reg):
     return x
 
 
-def SR3(Op, Reg, data, kappa, eps, x0=None, adaptive=True,
-        iter_lim_outer=int(1e2), iter_lim_inner=int(1e2)):
+def SR3(Op: "LinearOperator", Reg: "LinearOperator", 
+        data: NDArray, kappa: float, eps: float, 
+        x0: Optional[NDArray] = None, 
+        adaptive: bool = True,
+        iter_lim_outer: int = 100, 
+        iter_lim_inner: int = 100) -> NDArray:
     r"""Sparse Relaxed Regularized Regression
 
     Applies the Sparse Relaxed Regularized Regression (SR3) algorithm to
@@ -115,7 +129,7 @@ def SR3(Op, Reg, data, kappa, eps, x0=None, adaptive=True,
         Initial guess
     adaptive : :obj:`bool`, optional
         Use adaptive SR3 with a stopping criterion for the inner iterations
-        or not
+        (``True``) or not (``False``)
     iter_lim_outer : :obj:`int`, optional
         Maximum number of iterations for the outer iteration
     iter_lim_inner : :obj:`int`, optional
@@ -160,7 +174,7 @@ def SR3(Op, Reg, data, kappa, eps, x0=None, adaptive=True,
         w_old = w
         temp = Reg.matvec(x)
         w = np.sign(temp) * np.maximum(abs(temp) - eta*eps, 0)
-        err1 = np.linalg.norm(v - w) / max(1, np.linalg.norm(w))
+        err1 = np.linalg.norm(v - w) / max(1.0, float(np.linalg.norm(w)))
         if err1 < 1e-6:
             return x
         theta = 2/(1 + np.sqrt(1+4/(theta**2)))

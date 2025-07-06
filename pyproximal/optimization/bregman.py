@@ -1,7 +1,10 @@
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
+
 import time
 import numpy as np
+
 from copy import deepcopy
+from pylops.utils.typing import NDArray
 
 from pyproximal.ProxOperator import ProxOperator
 
@@ -9,12 +12,12 @@ if TYPE_CHECKING:
     from pylops.linearoperator import LinearOperator
 
 
-def Bregman(proxf: ProxOperator, proxg: ProxOperator, x0: np.ndarray,
+def Bregman(proxf: ProxOperator, proxg: ProxOperator, x0: NDArray,
             solver: Callable, A: Optional["LinearOperator"] = None,
             alpha: float = 1., niterouter: int = 10,
             warm: bool = False, tolx: float = 1e-10, tolf: float = 1e-10,
-            bregcallback: Optional[Callable[[np.ndarray], None]] = None,
-            show: bool = False, **kwargs_solver: Any) -> np.ndarray:
+            bregcallback: Optional[Callable[[NDArray], None]] = None,
+            show: bool = False, **kwargs_solver: Any) -> NDArray:
     r"""Bregman iterations with Proximal Solver
 
     Solves one of the following minimization problem using Bregman iterations
@@ -119,10 +122,10 @@ def Bregman(proxf: ProxOperator, proxg: ProxOperator, x0: np.ndarray,
     # multiply alpha to proxg
     proxg_scaled: ProxOperator = alpha * proxg
 
-    x: np.ndarray = np.copy(x0)
-    q: np.ndarray = np.zeros_like(x0)
+    x: NDArray = np.copy(x0)
+    q: NDArray = np.zeros_like(x0)
     for iiter in range(niterouter):
-        xold: np.ndarray = x.copy()
+        xold: NDArray = x.copy()
         # solve optimization
         if iiter == 0:
             proxf_q: ProxOperator = proxf
@@ -130,15 +133,15 @@ def Bregman(proxf: ProxOperator, proxg: ProxOperator, x0: np.ndarray,
             proxf_q = deepcopy(proxf) - alpha * q.copy()
 
         if A is None:
-            x_solver_result: Union[np.ndarray, Tuple[np.ndarray, ...]] = \
+            x_solver: Union[NDArray, Tuple[NDArray, ...]] = \
                 solver(proxf_q, proxg_scaled, x0=x if warm else x0, **kwargs_solver)
         else:
-            x_solver_result = \
+            x_solver = \
                 solver(proxf_q, proxg_scaled, A=A, x0=x if warm else x0, **kwargs_solver)
-        if isinstance(x_solver_result, tuple):
-            x = x_solver_result[0]
+        if isinstance(x_solver, tuple):
+            x = x_solver[0]
         else:
-            x = x_solver_result
+            x = x_solver
 
         # update q
         q = q - (1. / alpha) * proxf.grad(x)

@@ -1,9 +1,16 @@
 import numpy as np
-from pyproximal.ProxOperator import ProxOperator # For prox type hint
+
+from pyproximal.ProxOperator import ProxOperator
+from pylops.utils.typing import NDArray
 
 
-def moreau(prox: ProxOperator, x: np.ndarray, tau: float,
-           tol: float = 1e-5, raiseerror: bool = True, verb: bool = False) -> bool:
+def moreau(
+        prox: ProxOperator, 
+        x: NDArray, tau: float,
+        tol: float = 1e-5, 
+        raiseerror: bool = True, 
+        verb: bool = False,
+    ) -> bool:
     r"""Moreau Identity.
 
     The Moreau identity defines a relation between the vector :math:`\mathbf{u}`,
@@ -14,7 +21,7 @@ def moreau(prox: ProxOperator, x: np.ndarray, tau: float,
     ----------
     prox : :obj:`pyprox.ProxOperator`
         Proximal operator
-    x : :obj:`np.ndarray`
+    x : :obj:`numpy.ndarray`
         Vector
     tau : :obj:`float`
         Positive scalar weight
@@ -40,19 +47,17 @@ def moreau(prox: ProxOperator, x: np.ndarray, tau: float,
 
     """
     # compute prox
-    p: np.ndarray = prox.prox(x, tau)
+    p: NDArray = prox.prox(x, tau)
 
     # compute dualprox
-    # prox.proxdual returns np.ndarray, tau is float, so pdual is np.ndarray
-    pdual: np.ndarray = tau * prox.proxdual(x / tau, 1. / tau)
+    pdual: NDArray = tau * prox.proxdual(x / tau, 1. / tau)
 
     if verb:
         print('x: ', x)
         print('p + pdual: ', p + pdual)
         print('error: ', x - (p + pdual))
     
-    # np.allclose returns a bool
-    if bool(np.allclose(x, p + pdual, atol=tol)):
+    if np.allclose(x, p + pdual, atol=tol):
         return True
     else:
         if raiseerror:

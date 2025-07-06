@@ -84,10 +84,10 @@ class ProxOperator:
         value of the function.
         """
         # This base implementation is a placeholder for type checking.
-        # Specific ProxOperator subclasses should provide a meaningful implementation
-        # if they are intended to be callable for functional evaluation, returning a float.
-        # For example, an indicator function might return 0.0 or np.inf.
-        # A norm might return its computed value.
+        # Specific ProxOperator subclasses should provide a meaningful 
+        # implementation if they are intended to be callable for functional 
+        # evaluation. For example, an indicator function might return 0.0 
+        # or np.inf and a norm might return its computed value.
         raise NotImplementedError("This ProxOperator's __call__ method "
                                   "must be implemented by subclasses to return a float.")
 
@@ -96,7 +96,7 @@ class ProxOperator:
         """Proximal operator applied to a vector via Moreau decomposition
 
         """
-        p: NDArray = x - tau * self.proxdual(x / tau, 1. / tau, **kwargs)
+        p = x - tau * self.proxdual(x / tau, 1. / tau, **kwargs)
         return p
 
     @_check_tau
@@ -104,7 +104,7 @@ class ProxOperator:
         """Dual proximal operator applied to a vector via Moreau decomposition
 
         """
-        pdual: NDArray = x - tau * self.prox(x / tau, 1. / tau, **kwargs)
+        pdual = x - tau * self.prox(x / tau, 1. / tau, **kwargs)
         return pdual
 
     @_check_tau
@@ -123,7 +123,7 @@ class ProxOperator:
 
         Parameters
         ----------
-        x : :obj:`np.ndarray`
+        x : :obj:`numpy.ndarray`
             Vector
         tau : :obj:`float`
             Positive scalar weight
@@ -149,7 +149,7 @@ class ProxOperator:
 
         Parameters
         ----------
-        x : :obj:`np.ndarray`
+        x : :obj:`numpy.ndarray`
             Vector
         tau : :obj:`float`
             Positive scalar weight
@@ -158,7 +158,7 @@ class ProxOperator:
         return self._proxdual_moreau(x, tau, **kwargs)
 
     def grad(self, x: NDArray) -> NDArray:
-        """Compute gradient of the Moreau envelope of the function.
+        r"""Compute gradient of the Moreau envelope of the function.
 
         This method is only called if the user does not provide a gradient
         because the function is not differentiable. In this case, the gradient
@@ -171,20 +171,20 @@ class ProxOperator:
 
         Parameters
         ----------
-        x : :obj:`np.ndarray`
+        x : :obj:`numpy.ndarray`
             Vector
         
         Returns
         -------
-        g : :obj:`np.ndarray`
+        g : :obj:`numpy.ndarray`
             Gradient vector
 
         """
-        g: np.ndarray = (x - self.prox(x, self.sigmame)) / self.sigmame
+        g = (x - self.prox(x, self.sigmame)) / self.sigmame
         return g
     
     def affine_addition(self, v: NDArray) -> "ProxOperator":
-        """Affine addition
+        r"""Affine addition
 
         Adds the dot-product of vector ``v`` and vector ``x`` (which is passed
         to ``dual`` or ``proxdual``) to the current function.
@@ -193,13 +193,14 @@ class ProxOperator:
 
         Parameters
         ----------
-        v : :obj:`np.ndarray`
+        v : :obj:`numpy.ndarray`
             Vector
 
         Notes
         -----
-        The proximal operator of a function :math:`g=f(\mathbf{x}) +
-        \mathbf{v}^T \mathbf{x}` is defined as:
+        The proximal operator of a function 
+        :math:`g=f(\mathbf{x}) + \mathbf{v}^T \mathbf{x}` 
+        is defined as:
 
         .. math::
 
@@ -281,7 +282,7 @@ class ProxOperator:
         Parameters
         ----------
         g : :obj:`pyproximal.proximal.ProxOperator`
-            Right operator
+            Second operator in the chain
 
         Notes
         -----
@@ -289,15 +290,15 @@ class ProxOperator:
 
         .. math::
 
-            prox_{\tau f g} (\mathbf{x}) = prox_{\tau g}(prox_{\tau f g}(x))
+            prox_{\tau g f} (\mathbf{x}) = prox_{\tau g}(prox_{\tau f}(x))
 
         """
         return _ChainOperator(self, g)
 
-    def __add__(self, v: np.ndarray) -> "ProxOperator":
+    def __add__(self, v: NDArray) -> "ProxOperator":
         return self.affine_addition(v)
 
-    def __sub__(self, v: np.ndarray) -> "ProxOperator":
+    def __sub__(self, v: NDArray) -> "ProxOperator":
         return self.__add__(-v)
 
     def __rmul__(self, sigma: Union[float, int, "ProxOperator"]) -> "ProxOperator":
@@ -320,16 +321,16 @@ class _AdjointOperator(ProxOperator):
         self.f: "ProxOperator" = f
         super().__init__(None, True if f.hasgrad else False)
 
-    def __call__(self, x: np.ndarray) -> float: # Return type consistent with base
+    def __call__(self, x: NDArray) -> float: # Return type consistent with base
         # self.f is a ProxOperator, its __call__ should return float.
         return self.f(x)
 
     @_check_tau
-    def prox(self, x: np.ndarray, tau: float, **kwargs: Any) -> np.ndarray:
+    def prox(self, x: NDArray, tau: float, **kwargs: Any) -> NDArray:
         return self.f.proxdual(x, tau, **kwargs)
 
     @_check_tau
-    def proxdual(self, x: np.ndarray, tau: float, **kwargs: Any) -> np.ndarray:
+    def proxdual(self, x: NDArray, tau: float, **kwargs: Any) -> NDArray:
         return self.f.prox(x, tau, **kwargs)
 
 
@@ -340,7 +341,7 @@ class _SumOperator(ProxOperator):
         if not isinstance(v, np.ndarray):
             raise ValueError('Second input must be a numpy array')
         self.f: ProxOperator = f
-        self.v: np.ndarray = v
+        self.v: NDArray = v
         super().__init__(None, True if f.hasgrad else False)
 
     def __call__(self, x: NDArray) -> float: # Return type consistent with base
@@ -364,35 +365,25 @@ class _ChainOperator(ProxOperator):
         self.g: ProxOperator = g
         super().__init__(None, True if f.hasgrad else False)
 
-    def __call__(self, x: NDArray) -> float: # Return type consistent with base
+    def __call__(self, x: NDArray) -> float:
         # If a chain operator is to be callable for evaluation,
         # it implies f(g(input_to_g)).
         # This would require g's __call__ to return an np.ndarray suitable for f's __call__.
         # This is generally not true; __call__ returns float.
         # Thus, a generic chain's __call__ value is ill-defined without more structure.
-        # Raising NotImplementedError via super() is appropriate.
-        return super().__call__(x)
-
+        raise ValueError('It is not possible to perform function evaluation'
+                         'of a chain of operators input must be a float')
+        
     @_check_tau
-    def prox(self, x: np.ndarray, tau: float, **kwargs: Any) -> np.ndarray:
-        # Assuming self.f and self.g are ProxOperator instances
-        # and their prox methods are correctly typed.
-        # The original logic: self.g.prox(self.f.prox(x, tau), tau)
-        # This implies f.prox is applied first, then g.prox.
-        # However, chain rule for prox is usually prox_f(prox_g(x)) if it's f(g(x)).
-        # Or if it's (f+g)(x) and they operate on different parts, it's different.
-        # The note says: prox_fg(x) = prox_g(prox_f(x)) - this seems to be prox_{f circ g}
-        # The implementation prox_g(prox_f(x, tau), tau) seems to apply f then g.
-        # Let's assume the implementation is what's intended.
-        intermediate_x = self.f.prox(x, tau, **kwargs) # Pass kwargs
-        return self.g.prox(intermediate_x, tau, **kwargs) # Pass kwargs
+    def prox(self, x: NDArray, tau: float, **kwargs: Any) -> NDArray:
+        intermediate_x = self.f.prox(x, tau, **kwargs)
+        return self.g.prox(intermediate_x, tau, **kwargs)
 
-    def grad(self, x: np.ndarray) -> np.ndarray: # Changed from None to np.ndarray
+    def grad(self, x: NDArray) -> NDArray:
         # The gradient of a chain f(g(x)) is f'(g(x)) * g'(x).
         # This is complex for general proximal operators.
         # If grad is not well-defined or always available for a chain,
         # raising NotImplementedError is appropriate.
-        # The base class expects np.ndarray.
         # If this operator *can* have a gradient (e.g., if f and g are differentiable),
         # it should be computed. Otherwise, this breaks the Liskov Substitution Principle.
         # For now, to satisfy mypy, we must return np.ndarray or ensure base allows Optional.

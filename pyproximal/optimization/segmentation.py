@@ -1,20 +1,22 @@
-import time
+from typing import Any, Callable, Dict, Optional, Tuple
+
 import numpy as np
-from typing import Callable, Optional, Any, Tuple, Dict, Union # Added Union
 
 from pylops import Gradient, BlockDiag
-from pyproximal import Simplex, L1, L21, VStack
+from pylops.utils.typing import NDArray, ShapeLike
+
+from pyproximal.ProxOperator import ProxOperator
+from pyproximal import Simplex, L21, VStack
 from pyproximal.optimization.primaldual import PrimalDual
-from pyproximal.ProxOperator import ProxOperator # For potential future use if proxs are passed
 
 
-def Segment(y: np.ndarray, cl: np.ndarray, sigma: float, alpha: float,
-            clsigmas: Optional[np.ndarray] = None,
-            z: Optional[np.ndarray] = None, niter: int = 10,
-            x0: Optional[np.ndarray] = None,
-            callback: Optional[Callable[[np.ndarray], None]] = None,
+def Segment(y: NDArray, cl: NDArray, sigma: float, alpha: float,
+            clsigmas: Optional[NDArray] = None,
+            z: Optional[NDArray] = None, niter: int = 10,
+            x0: Optional[NDArray] = None,
+            callback: Optional[Callable[[NDArray], None]] = None,
             show: bool = False,
-            kwargs_simplex: Optional[Dict[str, Any]] = None) -> Tuple[np.ndarray, np.ndarray]:
+            kwargs_simplex: Optional[Dict[str, Any]] = None) -> Tuple[NDArray, NDArray]:
     r"""Primal-dual algorithm for image segmentation
 
     Perform image segmentation over :math:`N_{cl}` classes using the
@@ -22,7 +24,7 @@ def Segment(y: np.ndarray, cl: np.ndarray, sigma: float, alpha: float,
 
     Parameters
     ----------
-    y : :obj:`np.ndarray`
+    y : :obj:`numpy.ndarray`
         Image to segment (must have 2 or more dimensions)
     cl : :obj:`numpy.ndarray`
         Classes
@@ -49,11 +51,11 @@ def Segment(y: np.ndarray, cl: np.ndarray, sigma: float, alpha: float,
 
     Returns
     -------
-    x : :obj:`numpy.ndarray`
+    x_pd_reshaped : :obj:`numpy.ndarray`
         Classes probabilities. This is a vector of size :math:`N_{dim} \times
         N_{cl}` whose columns contain the probability for each pixel to be in
         the class :math:`c_i`
-    cl : :obj:`numpy.ndarray`
+    cl_pd_reshaped : :obj:`numpy.ndarray`
         Estimated classes. This is a vector of the same size of the input data
         ``y`` with the selected classes at each pixel.
 
@@ -80,55 +82,46 @@ def Segment(y: np.ndarray, cl: np.ndarray, sigma: float, alpha: float,
         Imaging and Vision, 40, 8pp. 120–145. 2011.
 
     """
-    current_kwargs_simplex: Dict[str, Any] = {} if kwargs_simplex is None else kwargs_simplex
+    upd_kwargs_simplex: Dict[str, Any] = {} if kwargs_simplex is None else kwargs_simplex
 
-    dims: Tuple[int, ...] = y.shape
+    dims: ShapeLike = y.shape
     ndims: int = len(dims)
-    dimsprod: int = np.prod(np.array(dims)).item() # Ensure scalar int
+    dimsprod: int = int(np.prod(np.array(dims)))
     ncl: int = len(cl)
 
     # Data (difference between image and center of classes)
-    g_data: np.ndarray = sigma / 2. * (y.reshape(1, dimsprod) - cl[:, np.newaxis]) ** 2
+    g: NDArray = sigma / 2. * (y.reshape(1, dimsprod) - cl[:, np.newaxis]) ** 2
     if clsigmas is not None:
-        g_data /= clsigmas[:, np.newaxis]
-    g_data = g_data.ravel()
+        g /= clsigmas[:, np.newaxis]
+    g = g.ravel()
 
     # Gradient operator
     sampling: float = 1.
-    # Assuming Gradient and BlockDiag are correctly typed or can be treated as Any for now
-    Gop: Any = Gradient(dims=dims, sampling=sampling, edge=False, # type: ignore
+    Gop: Any = Gradient(dims=dims, sampling=sampling, edge=False,
                        kind='forward', dtype='float64')
-    Gop = BlockDiag([Gop] * ncl) # type: ignore
+    Gop = BlockDiag([Gop] * ncl)
 
-    # Simplex and L1 proximal operators
-    simp: Simplex = Simplex(dimsprod * ncl, radius=1, dims=(ncl, dimsprod), axis=0, # type: ignore
-                            **current_kwargs_simplex)
-    #l1 = L1(sigma=0.5 * alpha)
-    l21_op: VStack = VStack([L21(ndim=ndims, sigma=0.5 * alpha)] * ncl, # type: ignore
-                            nn=[ndims * dimsprod] * ncl)
+    # Simplex and L21 proximal operators
+    simp: ProxOperator = Simplex(dimsprod * ncl, radius=1, dims=(ncl, dimsprod), axis=0,
+                                 **upd_kwargs_simplex)
+    l21_op: ProxOperator = VStack([L21(ndim=ndims, sigma=0.5 * alpha)] * ncl,
+                                  nn=[ndims * dimsprod] * ncl)
 
     # Steps
-    L_const: float = 8. / sampling ** 2
-    tau_step: float = 1.
-    mu_step: float = 1. / (tau_step * L_const)
+    L: float = 8. / sampling ** 2
+    tau: float = 1.
+    mu: float = 1. / (tau * L)
 
     # Inversion
-    # PrimalDual returns Union[np.ndarray, Tuple[np.ndarray, np.ndarray]], handle accordingly
-    x_pd_result: Union[np.ndarray, Tuple[np.ndarray, np.ndarray]] = \
+    x_pd: NDArray = \
         PrimalDual(simp, l21_op, Gop,
-                   x0=np.zeros_like(g_data) if x0 is None else x0,
-                   tau=tau_step, mu=mu_step,
-                   z=g_data if z is None else g_data + z, theta=1.,
-                   niter=niter, callback=callback, show=show)
+                   x0=np.zeros_like(g) if x0 is None else x0,
+                   tau=tau, mu=mu,
+                   z=g if z is None else g + z, theta=1.,
+                   niter=niter, callback=callback, 
+                   returny=False, show=show)
 
-    x_seg: np.ndarray
-    if isinstance(x_pd_result, tuple): # if returny=True was passed implicitly or by mistake
-        x_seg = x_pd_result[0]
-    else:
-        x_seg = x_pd_result
+    x_pd_reshaped: NDArray = x_pd.reshape(ncl, dimsprod).T
+    cl_pd_reshaped: NDArray = np.argmax(x_pd_reshaped, axis=1)
 
-    x_reshaped: np.ndarray = x_seg.reshape(ncl, dimsprod).T
-    cl_estimated: np.ndarray = np.argmax(x_reshaped, axis=1)
-    cl_reshaped: np.ndarray = cl_estimated.reshape(dims)
-
-    return x_reshaped, cl_reshaped
+    return x_pd_reshaped, cl_pd_reshaped

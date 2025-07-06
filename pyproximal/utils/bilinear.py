@@ -1,12 +1,15 @@
-from typing import TYPE_CHECKING, Optional, Any, Tuple
+from typing import TYPE_CHECKING, Optional, Any
 
 import numpy as np
+
+from abc import ABC, abstractmethod
+from pylops.utils.typing import NDArray
 
 if TYPE_CHECKING:
     from pylops.linearoperator import LinearOperator
 
 
-class BilinearOperator:
+class BilinearOperator(ABC):
     r"""Common interface for bilinear operator of a function.
 
     Bilinear operator template class. A user
@@ -18,6 +21,10 @@ class BilinearOperator:
       :math:`\nabla_y H`
     - ``grad``: a method returning the stacked gradient vector over
       :math:`\mathbf{x},\mathbf{y}`: :math:`[\nabla_x H`, [\nabla_y H]`
+      where the internal :math:`\mathbf{x}` variable is used in the 
+      computation of the gradient of :math:`\mathbf{y}` and the internal 
+      :math:`\mathbf{y}` variable is used in the  computation of the 
+      gradient of :math:`\mathbf{x}` (not those provided)
     - ``lx``: Lipschitz constant of :math:`\nabla_x H`
     - ``ly``: Lipschitz constant of :math:`\nabla_y H`
 
@@ -33,11 +40,11 @@ class BilinearOperator:
     i.e, :math:`\mathbf{H_x}(y)\mathbf{x}` and :math:`\mathbf{H_y}(y)\mathbf{x}`.
 
     """
-    # These will be initialized by subclasses, but good to declare them for type checking
-    x: np.ndarray
-    y: np.ndarray
-    sizex: int # Added for gradtest_bilinear compatibility
-    sizey: int # Added for gradtest_bilinear compatibility
+    # Initialized by subclasses, but declared here for type checking
+    x: NDArray
+    y: NDArray
+    sizex: int
+    sizey: int
 
     def __init__(self) -> None:
         # Initialize sizex and sizey, e.g. to 0 or make them abstract if preferred
@@ -50,47 +57,47 @@ class BilinearOperator:
         # set them in their own __init__.
         # For the base class, if gradtest_bilinear accesses Op.x before it's properly set,
         # it could be an issue. Let's initialize to empty arrays.
-        self.x: np.ndarray = np.array([])
-        self.y: np.ndarray = np.array([])
+        self.x: NDArray = np.array([])
+        self.y: NDArray = np.array([])
         pass
 
-    def __call__(self, x: np.ndarray, y: Optional[np.ndarray] = None) -> Any:
-        # Return type depends on subclass implementation
-        raise NotImplementedError
+    @abstractmethod
+    def __call__(self, x: NDArray, y: Optional[NDArray] = None) -> Any:
+        pass
+    
+    @abstractmethod
+    def gradx(self, x: NDArray) -> NDArray:
+        pass
 
-    def gradx(self, x: np.ndarray) -> np.ndarray:
-        # Return type depends on subclass implementation
-        raise NotImplementedError
+    @abstractmethod
+    def grady(self, y: NDArray) -> NDArray:
+        pass
 
-    def grady(self, y: np.ndarray) -> np.ndarray:
-        # Return type depends on subclass implementation
-        raise NotImplementedError
+    @abstractmethod
+    def grad(self, x_or_y: NDArray) -> NDArray:
+        pass
 
-    def grad(self, x_or_y: np.ndarray) -> np.ndarray: # Argument can be x or y depending on context
-        # Return type depends on subclass implementation
-        raise NotImplementedError
+    @abstractmethod
+    def lx(self, x: NDArray) -> float:
+        pass
+    
+    @abstractmethod
+    def ly(self, y: NDArray) -> float:
+        pass
 
-    def lx(self, x: np.ndarray) -> float: # Lipschitz constant is scalar
-        # Return type depends on subclass implementation
-        raise NotImplementedError
-
-    def ly(self, y: np.ndarray) -> float: # Lipschitz constant is scalar
-        # Return type depends on subclass implementation
-        raise NotImplementedError
-
-    def updatex(self, x: np.ndarray) -> None:
+    def updatex(self, x: NDArray) -> None:
         """Update x variable (to be used to update the internal variable x)
         """
         self.x = x
 
-    def updatey(self, y: np.ndarray) -> None:
+    def updatey(self, y: NDArray) -> None:
         """Update y variable (to be used to update the internal variable y)
         """
         self.y = y
 
-    def updatexy(self, xy: np.ndarray) -> None:
-        raise NotImplementedError
-
+    @abstractmethod
+    def updatexy(self, xy: NDArray) -> None:
+        pass
 
 class LowRankFactorizedMatrix(BilinearOperator):
     r"""Low-Rank Factorized Matrix operator.
@@ -136,101 +143,100 @@ class LowRankFactorizedMatrix(BilinearOperator):
     is used for the second variable within parenthesis (after ;).
 
     """
-    def __init__(self, X: np.ndarray, Y: np.ndarray, d: np.ndarray,
+    def __init__(self, X: NDArray, Y: NDArray, d: NDArray,
                  Op: Optional["LinearOperator"] = None) -> None:
-        super().__init__() # Call BilinearOperator's __init__
+        if X.shape[1] != Y.shape[0]:
+            raise ValueError("The second dimension of x differs from the "
+                             "first dimension of Y "
+                             f"({X.shape[1]} != {Y.shape[0]:})")
         self.n: int
         self.k: int
         self.n, self.k = X.shape
         self.m: int = Y.shape[1]
 
-        self.x: np.ndarray = X # This is X_mat
-        self.y: np.ndarray = Y # This is Y_mat
-        self.d: np.ndarray = d
+        self.x: NDArray = X
+        self.y: NDArray = Y
+        self.d: NDArray = d
         self.Op: Optional["LinearOperator"] = Op
         self.sizex: int = self.n * self.k
         self.sizey: int = self.m * self.k
 
-    def __call__(self, x_input: np.ndarray, y_input: Optional[np.ndarray] = None) -> float:
+    def __call__(self, x: NDArray, y: Optional[NDArray] = None) -> float:
         # x_input can be concatenated [x,y] or just x if y_input is provided
-        current_x_vec: np.ndarray
-        current_y_vec: np.ndarray
-        if y_input is None:
-            current_x_vec, current_y_vec = x_input[:self.sizex], x_input[self.sizex:]
+        current_x: NDArray
+        current_y: NDArray
+        if y is None:
+            current_x, current_y = x[:self.sizex], x[self.sizex:]
         else:
-            current_x_vec = x_input
-            current_y_vec = y_input
+            current_x = x
+            current_y = y
         
         # Store original self.x to restore after calculation, as _matvecy uses self.x
-        original_self_x: np.ndarray = self.x.copy()
-        self.updatex(current_x_vec) # Temporarily update self.x for _matvecy
+        original_x: NDArray = self.x.copy()
+
+        # Temporarily update self.x for _matvecy
+        self.updatex(current_x) 
         
-        # H(X,Y) = 0.5 * || Op(XY) - d ||_2^2
-        # _matvecy(y_vec) computes Op(self.x @ Y) where Y is from y_vec
-        # So, res = d - Op(current_X @ current_Y)
-        res: np.ndarray = self.d - self._matvecy(current_y_vec)
+        # Compute residual: note that _matvecy(y_vec) computes 
+        # Op(self.x @ Y) where Y is from y_vec so 
+        # res = d - Op(current_X @ current_Y)
+        res: NDArray = self.d - self._matvecy(current_y)
         
-        self.updatex(original_self_x) # Restore original self.x
-        return float(np.linalg.norm(res)**2 / 2.)
+        # Restore original self.x
+        self.updatex(original_x)
 
-    def _matvecx(self, x_vec: np.ndarray) -> np.ndarray: # x_vec is the flattened X matrix
-        X_mat: np.ndarray = x_vec.reshape(self.n, self.k)
-        # Y_mat from self.y (which is the stored Y matrix)
-        Y_mat_stored: np.ndarray = self.y.reshape(self.k, self.m)
-        result_mat: np.ndarray = X_mat @ Y_mat_stored # X @ Y
+        return float(np.linalg.norm(res) ** 2 / 2.)
+
+    def _matvecx(self, x: NDArray) -> NDArray:
+        # Recreate matrix from flattened x
+        X: NDArray = x.reshape(self.n, self.k)
+        # Recreate matrix from flattended self.y
+        Y: NDArray = self.y.reshape(self.k, self.m)
+        XY: NDArray = X @ Y
         if self.Op is not None:
-            # Op acts on the vectorized result_mat
-            result_vec: np.ndarray = self.Op @ result_mat.ravel() # type: ignore
-            return result_vec.ravel()
-        return result_mat.ravel()
+            # Op acts on the vectorized version of XY
+            XY: NDArray = self.Op @ XY.ravel() # type: ignore
+        return XY.ravel()
 
-    def _matvecy(self, y_vec: np.ndarray) -> np.ndarray: # y_vec is the flattened Y matrix
-        Y_mat: np.ndarray = y_vec.reshape(self.k, self.m)
-        # X_mat from self.x (which is the stored X matrix)
-        X_mat_stored: np.ndarray = self.x.reshape(self.n, self.k)
-        result_mat: np.ndarray = X_mat_stored @ Y_mat # X @ Y
+    def _matvecy(self, y: NDArray) -> NDArray:
+        # Recreate matrix from flattened y
+        Y: NDArray = y.reshape(self.k, self.m)
+        # Recreate matrix from flattended self.x
+        X: NDArray = self.x.reshape(self.n, self.k)
+        XY: NDArray = X @ Y
         if self.Op is not None:
-            result_vec: np.ndarray = self.Op @ result_mat.ravel() # type: ignore
-            return result_vec.ravel()
-        return result_mat.ravel()
+            XY: NDArray = self.Op @ XY.ravel() # type: ignore
+        return XY.ravel()
 
-    def matvec(self, x_in: np.ndarray) -> np.ndarray: # x_in can be x_vec or y_vec
-        # This method is ambiguous if n*k == m*k.
-        # It's better to use _matvecx or _matvecy directly if sizes can be ambiguous.
-        # The original code had n==m check, but it should be about total size.
-        # sizex = n*k, sizey = m*k.
-        if self.sizex == self.sizey and self.n != self.m : # Ambiguity if total sizes are same but underlying shapes differ
-             pass # This case is still tricky, but less likely than n==m for ambiguity.
-
-        if self.n == self.m and self.sizex == x_in.size and self.sizey == x_in.size : # True ambiguity
-            raise NotImplementedError('Since n=m (and thus sizex=sizey if k is same), this method '
-                                      'cannot distinguish automatically between _matvecx and _matvecy. '
+    def matvec(self, x: NDArray) -> NDArray:
+        # Check that no ambiguous situation arises due to n==m
+        if self.n == self.m:
+            raise NotImplementedError('Since n=m, this method cannot distinguish '
+                                      'automatically between _matvecx and _matvecy. '
                                       'Explicitly call either of those two methods.')
-        
-        result_vec: np.ndarray
-        if x_in.size == self.sizex:
-            result_vec = self._matvecx(x_in)
-        elif x_in.size == self.sizey:
-            result_vec = self._matvecy(x_in)
+        y: NDArray
+        if x.size == self.sizex:
+            y = self._matvecx(x)
+        elif x.size == self.sizey:
+            y = self._matvecy(x)
         else:
             raise ValueError("Input vector size does not match sizex or sizey.")
-        return result_vec
+        return y
 
-    def lx(self, x_vec: np.ndarray) -> float: # x_vec is the flattened X matrix for which we want Lx
+    def lx(self, x: NDArray) -> float:
         if self.Op is not None:
             # Lipschitz constant for gradx H involves Op.H Op and Y Y.H.
             # This is non-trivial and depends on Op's norm.
             # For simplicity or if Op=I, this can be estimated.
-            # Original code raises ValueError.
-            raise ValueError('lx cannot be computed automatically when using Op an external operator.')
+            raise ValueError('lx cannot be computed automatically when using Op.')
         # If Op is None, H = 0.5 * ||XY - d||^2. gradx H = (XY-d)Y.H
         # Lipschitz of gradx H involves ||Y Y.H||_F or ||Y||_2^2
-        # The original code calculates norm(X.H @ X, 'fro') which seems to be for a different formulation.
+        # The original code calculates norm(X.H @ X, 'fro') which 
+        # seems to be for a different formulation.
         # Let's assume self.y (stored Y) is used for Lipschitz constant.
-        Y_mat_stored: np.ndarray = self.y.reshape(self.k, self.m)
+        Y: NDArray = self.y.reshape(self.k, self.m)
         # L_x = ||Y^H Y||_2 or similar. For Frobenius norm of Y Y.H:
-        return float(np.linalg.norm(Y_mat_stored @ Y_mat_stored.conj().T, 'fro'))
-
+        return float(np.linalg.norm(Y @ Y.conj().T, 'fro'))
 
     def ly(self, y_vec: np.ndarray) -> float: # y_vec is the flattened Y matrix for which we want Ly
         if self.Op is not None:
@@ -241,88 +247,69 @@ class LowRankFactorizedMatrix(BilinearOperator):
         X_mat_stored: np.ndarray = self.x.reshape(self.n, self.k)
         return float(np.linalg.norm(X_mat_stored.conj().T @ X_mat_stored, 'fro'))
 
-
-    def gradx(self, x_vec: np.ndarray) -> np.ndarray: # x_vec is the flattened X matrix
-        # grad_x H = Op.H ( Op(XY) - d ) Y.H
-        # Here, X comes from x_vec, Y is self.y (stored).
-        # Need to compute Op(XY)-d first.
-        # _matvecx(x_vec) computes Op(X_from_x_vec @ Y_stored).
-        # So, Op(XY) is _matvecx(x_vec).
+    def gradx(self, x: NDArray) -> NDArray:
+        """Compute gradient of H wrt x
         
-        # Temporarily update self.x to X_from_x_vec for consistent use in _matvecx if it relies on self.x for X part.
-        # However, _matvecx is defined to take x (representing X) as input.
-        # Let's ensure current self.x is the one for which this grad is calculated.
-        original_self_x = self.x.copy()
-        self.updatex(x_vec) # Ensures _matvecx uses the X from x_vec
+        Compute grad_x H = Op.H ( Op(XY) - d ) Y.H
+        Here, X comes from x, Y is self.y (stored).
+        and _matvecx(x) computes Op(X @ Y).
 
-        op_xy_vec: np.ndarray = self._matvecx(x_vec) # This is Op(X Y_stored)
-        residual_vec: np.ndarray = op_xy_vec - self.d
+        """
+        # Compute residual
+        res: NDArray = self._matvecx(x) - self.d
         
-        # r_intermediate is Op.H @ residual_vec
-        r_intermediate: np.ndarray
+        # Apply adjoint of operator if present
+        res_op: NDArray
         if self.Op is not None:
-            r_intermediate = self.Op.H @ residual_vec # type: ignore
+            res_op = self.Op.H @ res # type: ignore
         else: # Op is Identity
-            r_intermediate = residual_vec
-            
-        # Reshape r_intermediate to matrix form (n, m) to multiply with Y.H
-        r_intermediate_mat: np.ndarray = r_intermediate.reshape(self.n, self.m)
+            res_op = res
         
-        Y_mat_stored: np.ndarray = self.y.reshape(self.k, self.m)
-        grad_x_mat: np.ndarray = r_intermediate_mat @ Y_mat_stored.conj().T
+        # Apply Y.H
+        Y: NDArray = self.y.reshape(self.k, self.m)
+        grad_x: NDArray = res_op.reshape(self.n, self.m) @ Y.conj().T
         
-        self.updatex(original_self_x) # Restore original self.x
-        return grad_x_mat.ravel()
+        return grad_x.ravel()
 
-    def grady(self, y_vec: np.ndarray) -> np.ndarray: # y_vec is the flattened Y matrix
-        # grad_y H = X.H Op.H ( Op(XY) - d )
-        # Here, Y comes from y_vec, X is self.x (stored).
-        # Need Op(XY)-d.
-        # _matvecy(y_vec) computes Op(X_stored @ Y_from_y_vec)
+    def grady(self, y: NDArray) -> NDArray:
+        """Compute gradient of H wrt y
         
-        original_self_y = self.y.copy()
-        self.updatey(y_vec) # Ensure _matvecy uses Y from y_vec
+        Compute grad_y H = X.H Op.H ( Op(XY) - d )
+        Here, Y comes from y, X is self.x (stored).
+        and _matvecy(y_vec) computes Op(X @ Y).
 
-        op_xy_vec: np.ndarray = self._matvecy(y_vec) # This is Op(X_stored Y)
-        residual_vec: np.ndarray = op_xy_vec - self.d
+        """
+        # Compute residual
+        res: NDArray = self._matvecy(y) - self.d
         
-        # r_intermediate is Op.H @ residual_vec
-        r_intermediate: np.ndarray
+        # Apply adjoint of operator if present
+        res_op: NDArray
         if self.Op is not None:
-            r_intermediate = self.Op.H @ residual_vec # type: ignore
+            res_op = self.Op.H @ res # type: ignore
         else: # Op is Identity
-            r_intermediate = residual_vec
-            
-        r_intermediate_mat: np.ndarray = r_intermediate.reshape(self.n, self.m)
+            res_op = res
         
-        X_mat_stored: np.ndarray = self.x.reshape(self.n, self.k)
-        grad_y_mat: np.ndarray = X_mat_stored.conj().T @ r_intermediate_mat
-        
-        self.updatey(original_self_y) # Restore
-        return grad_y_mat.ravel()
+        # Apply X.H
+        X: NDArray = self.x.reshape(self.n, self.k)
+        grad_y: NDArray = X.conj().T @ res_op.reshape(self.n, self.m)
 
-    def grad(self, xy_vec: np.ndarray) -> np.ndarray: # xy_vec is concatenated [x_vec, y_vec]
-        x_part: np.ndarray = xy_vec[:self.sizex]
-        y_part: np.ndarray = xy_vec[self.sizex:]
-        
-        # Need to be careful: gradx uses self.y, grady uses self.x.
-        # These should be the Y and X from the *current* point (x_part, y_part) at which grad is evaluated.
-        # So, update self.x and self.y before calling gradx and grady.
-        original_x = self.x.copy()
-        original_y = self.y.copy()
-        self.updatex(x_part)
-        self.updatey(y_part)
+        return grad_y.ravel()
 
-        grad_x_val: np.ndarray = self.gradx(x_part) # gradx will use the updated self.y
-        grad_y_val: np.ndarray = self.grady(y_part) # grady will use the updated self.x
+    def grad(self, xy: NDArray) -> NDArray:
+        """Compute total gradient
+                
+        """
+        x: NDArray = xy[:self.sizex]
+        y: NDArray = xy[self.sizex:]
         
-        # Restore original self.x, self.y if they are meant to be persistent state beyond single grad call
-        self.updatex(original_x)
-        self.updatey(original_y)
+        # Computate gradients
+        grad_x: NDArray = self.gradx(x)
+        grad_y: NDArray = self.grady(y)
         
-        g_stacked: np.ndarray = np.hstack([grad_x_val, grad_y_val])
-        return g_stacked
+        # Stack gradients
+        grad_stacked: NDArray = np.hstack([grad_x, grad_y])
+        return grad_stacked
 
-    def updatexy(self, xy_vec: np.ndarray) -> None: # xy_vec is concatenated [x_vec, y_vec]
-        self.updatex(xy_vec[:self.sizex])
-        self.updatey(xy_vec[self.sizex:])
+    def updatexy(self, xy: NDArray) -> None:
+        self.updatex(xy[:self.sizex])
+        self.updatey(xy[self.sizex:])

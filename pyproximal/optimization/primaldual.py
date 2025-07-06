@@ -53,10 +53,10 @@ def PrimalDual(proxf: ProxOperator, proxg: ProxOperator, A: "LinearOperator",
         Linear operator of g
     x0 : :obj:`numpy.ndarray`
         Initial vector
-    tau : :obj:`float` or :obj:`np.ndarray`
+    tau : :obj:`float` or :obj:`numpy.ndarray`
         Stepsize of subgradient of :math:`f`. This can be constant 
         or function of iterations (in the latter cases provided as np.ndarray)
-    mu : :obj:`float` or :obj:`np.ndarray`
+    mu : :obj:`float` or :obj:`numpy.ndarray`
         Stepsize of subgradient of :math:`g^*`. This can be constant 
         or function of iterations (in the latter cases provided as np.ndarray)
     z0 : :obj:`numpy.ndarray`

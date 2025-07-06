@@ -54,13 +54,13 @@ class RelaxedMumfordShah(ProxOperator):
 
     Parameters
     ----------
-    sigma : :obj:`float` or :obj:`list` or :obj:`np.ndarray` or :obj:`func`, optional
+    sigma : :obj:`float` or :obj:`list` or :obj:`numpy.ndarray` or :obj:`func`, optional
         Multiplicative coefficient of L2 norm that controls the smoothness of the solutuon.
         This can be a constant number, a list of values (for multidimensional inputs, acting
         on the second dimension) or a function that is called passing a counter which keeps
         track of how many times the ``prox`` method has been invoked before and returns a
         scalar (or a list of) ``sigma`` to be used.
-    kappa : :obj:`float` or :obj:`list` or :obj:`np.ndarray` or :obj:`func`, optional
+    kappa : :obj:`float` or :obj:`list` or :obj:`numpy.ndarray` or :obj:`func`, optional
         Constant value in the rMS norm which essentially controls when the norm allows a jump. This can be a
         constant number, a list of values (for multidimensional inputs, acting on the second dimension) or
         a function that is called passing a counter which keeps track of how many

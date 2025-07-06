@@ -5,13 +5,22 @@ from pyproximal.ProxOperator import ProxOperator
 from pyproximal.utils.bilinear import BilinearOperator
 
 from pylops.utils.backend import get_module
+from pylops.utils.typing import NDArray
 
 
-def gradtest_proximal(Op: ProxOperator, n: int, x: Optional[np.ndarray] = None,
-                      dtype: str = "float64", delta: float = 1e-6,
-                      rtol: float = 1e-6, atol: float = 1e-21,
-                      complexflag: bool = False, raiseerror: bool = True,
-                      verb: bool = False, backend: str = "numpy") -> bool:
+def gradtest_proximal(
+        Op: ProxOperator, 
+        n: int, 
+        x: Optional[NDArray] = None,
+        dtype: str = "float64", 
+        delta: float = 1e-6,
+        rtol: float = 1e-6, 
+        atol: float = 1e-21,
+        complexflag: bool = False, 
+        raiseerror: bool = True,
+        verb: bool = False, 
+        backend: str = "numpy",
+    ) -> bool:
     r"""Gradient test for Proximal operator.
 
     Compute the gradient of ``Op`` using both the provided method and a
@@ -83,7 +92,7 @@ def gradtest_proximal(Op: ProxOperator, n: int, x: Optional[np.ndarray] = None,
     f: Any = Op(x)
 
     # compute gradient
-    g: np.ndarray = Op.grad(x)
+    g: NDArray = Op.grad(x)
 
     # choose location of perturbation and whether to act on real or imag part
     iqx: int = np.random.randint(0, n)
@@ -112,7 +121,7 @@ def gradtest_proximal(Op: ProxOperator, n: int, x: Optional[np.ndarray] = None,
         
     # evaluate if gradient test passed
     grad_diff = grad_delta - (grad.real if r_or_i == 0 else grad.imag)
-    passed = np.isclose(grad_diff, 0, rtol, atol)
+    passed = bool(np.isclose(grad_diff, 0, rtol, atol))
 
     # verbosity or error raising
     if (not passed and raiseerror) or verb:
@@ -127,10 +136,16 @@ def gradtest_proximal(Op: ProxOperator, n: int, x: Optional[np.ndarray] = None,
     return passed
 
 
-def gradtest_bilinear(Op: BilinearOperator, delta: float = 1e-6,
-                      rtol: float = 1e-6, atol: float = 1e-21,
-                      complexflag: bool = False, raiseerror: bool = True,
-                      verb: bool = False, backend: str = "numpy") -> bool:
+def gradtest_bilinear(
+        Op: BilinearOperator, 
+        delta: float = 1e-6,
+        rtol: float = 1e-6, 
+        atol: float = 1e-21,
+        complexflag: bool = False, 
+        raiseerror: bool = True,
+        verb: bool = False, 
+        backend: str = "numpy",
+    ) -> bool:
     r"""Gradient test for Bilinear operator.
 
     Compute the gradient of ``Op`` using both the provided method and a
@@ -191,8 +206,6 @@ def gradtest_bilinear(Op: BilinearOperator, delta: float = 1e-6,
         Op(\mathbf{x}, \mathbf{y})}{\delta \mathbf{y}}
 
     """
-    ncp = get_module(backend)
-
     nx = Op.sizex
     ny = Op.sizey
 
@@ -210,7 +223,7 @@ def gradtest_bilinear(Op: BilinearOperator, delta: float = 1e-6,
     iqx, iqy = np.random.randint(0, nx), np.random.randint(0, ny)
     x_or_y = np.random.randint(0, 2)
 
-    delta1 = delta
+    delta1 : Union[float, complex] = delta
     if complexflag:
         r_or_i = np.random.randint(0, 2)
         if r_or_i == 1:
@@ -227,13 +240,13 @@ def gradtest_bilinear(Op: BilinearOperator, delta: float = 1e-6,
     # compute new function at perturbed location
     fdelta = Op(x, y)
 
-    # compute gradient at perturbed location (f is always assume to
-    # be a real valued scalar
+    # compute gradient at perturbed location (f is always assumed 
+    # to be a real valued scalar
     grad_delta = (fdelta - f) / np.abs(delta)
     
     # evaluate if gradient test passed
     grad_diff = grad_delta - (grad.real if not complexflag or r_or_i == 0 else grad.imag)
-    passed = np.isclose(grad_diff, 0, rtol, atol)
+    passed = bool(np.isclose(grad_diff, 0, rtol, atol))
 
     # verbosity or error raising
     if (not passed and raiseerror) or verb:

@@ -13,7 +13,7 @@ class Intersection(ProxOperator):
         Size of vector to be projected
     n : :obj:`int`
         Number of vectors to be projected simultaneously
-    sigma : :obj:`np.ndarray` or :obj:`int`
+    sigma : :obj:`numpy.ndarray` or :obj:`int`
         Matrix of distances of size :math:`k \times k` (or single value in the
         case of constant matrix)
     k : :obj:`int`, optional
